@@ -56,7 +56,6 @@ export default function AdvertiserPage() {
       dailyBudgetXlm: parseFloat(form.dailyBudgetXlm) || 0,
       durationDays: parseInt(form.durationDays) || 30,
       contentId: form.contentId,
-      campaignType: 0,
     });
   };
 
@@ -98,8 +97,30 @@ export default function AdvertiserPage() {
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
+          {[
+            { id: 'campaigns', label: 'My Campaigns', icon: BarChart3 },
+            { id: 'create', label: 'Create Campaign', icon: PlusCircle },
+            { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id as any)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === id
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+                }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
+        </div>
 
           {/* Tabs */}
           <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
