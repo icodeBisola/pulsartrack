@@ -3,7 +3,7 @@
 
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+    contract, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env,
 };
 
 // ============================================================
@@ -232,7 +232,8 @@ impl FraudPreventionContract {
     }
 
     /// Flag suspicious publisher activity
-    pub fn flag_suspicious(env: Env, publisher: Address) {
+    pub fn flag_suspicious(env: Env, caller: Address, publisher: Address) {
+        Self::_require_admin_or_oracle(&env, &caller);
         env.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
@@ -294,6 +295,45 @@ impl FraudPreventionContract {
             panic!("unauthorized");
         }
         env.storage().persistent().remove(&DataKey::SuspiciousActivity(publisher));
+    }
+
+    pub fn suspend_publisher(env: Env, admin: Address, publisher: Address) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if admin != stored_admin {
+            panic!("unauthorized");
+        }
+        let key = DataKey::SuspiciousActivity(publisher.clone());
+        let mut activity: SuspiciousActivity =
+            env.storage()
+                .persistent()
+                .get(&key)
+                .unwrap_or(SuspiciousActivity {
+                    suspicious_views: 0,
+                    last_flagged: 0,
+                    total_flags: 0,
+                    suspended: false,
+                });
+
+        activity.suspended = true;
+        env.storage().persistent().set(&key, &activity);
+        env.storage().persistent().extend_ttl(
+            &key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+
+        if let Some(network_addr) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::PublisherNetwork)
+        {
+            let network_client = mocks::PublisherNetworkContractClient::new(&env, &network_addr);
+            network_client.suspend_publisher(&env.current_contract_address(), &publisher);
+        }
     }
 
     pub fn set_threshold(env: Env, admin: Address, threshold: u32) {
@@ -365,13 +405,19 @@ impl FraudPreventionContract {
     fn _generate_view_id(
         env: &Env,
         campaign_id: u64,
-        _publisher: &Address,
-        _viewer: &Address,
+        publisher: &Address,
+        viewer: &Address,
     ) -> BytesN<32> {
         // Create a deterministic ID from campaign+publisher+viewer+timestamp
         let mut data = Bytes::new(env);
         let campaign_bytes = campaign_id.to_be_bytes();
         for b in campaign_bytes.iter() {
+            data.push_back(*b);
+        }
+        data.append(&publisher.to_xdr(env));
+        data.append(&viewer.to_xdr(env));
+        let ts_bytes = env.ledger().timestamp().to_be_bytes();
+        for b in ts_bytes.iter() {
             data.push_back(*b);
         }
         env.crypto().sha256(&data).into()

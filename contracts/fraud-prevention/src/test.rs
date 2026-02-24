@@ -1,6 +1,6 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+use soroban_sdk::{testutils::{Address as _, Ledger}, Address, BytesN, Env};
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -171,7 +171,7 @@ fn test_remove_oracle() {
 fn test_flag_suspicious_admin() {
     let env = Env::default();
     env.mock_all_auths();
-    let (client, _admin) = setup(&env);
+    let (client, admin) = setup(&env);
 
     let publisher = Address::generate(&env);
 
@@ -403,4 +403,35 @@ fn test_fraud_integration() {
     client.set_dependent_contracts(&admin, &lifecycle, &network, &vault);
 
     client.flag_suspicious(&admin, &publisher);
+}
+#[test]
+fn test_duplicate_view_prevention_same_campaign() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let publisher1 = Address::generate(&env);
+    let publisher2 = Address::generate(&env);
+    let viewer1 = Address::generate(&env);
+    let viewer2 = Address::generate(&env);
+
+    let lifecycle = Address::generate(&env);
+    let network = Address::generate(&env);
+    let vault = Address::generate(&env);
+    client.set_dependent_contracts(&admin, &lifecycle, &network, &vault);
+
+    // Initial verify
+    assert!(client.verify_view(&1u64, &publisher1, &viewer1, &None));
+
+    // Same campaign, different viewer
+    assert!(client.verify_view(&1u64, &publisher1, &viewer2, &None));
+
+    // Same campaign, different publisher
+    assert!(client.verify_view(&1u64, &publisher2, &viewer1, &None));
+
+    // Same campaign/publisher/viewer, different timestamp
+    env.ledger().with_mut(|li| {
+        li.timestamp += 1;
+    });
+    assert!(client.verify_view(&1u64, &publisher1, &viewer1, &None));
 }
