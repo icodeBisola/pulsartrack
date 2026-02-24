@@ -3,13 +3,14 @@ use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
-    Address, Env, String, vec,
+    vec, Address, Env, String,
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 fn deploy_token(env: &Env, admin: &Address) -> Address {
-    env.register_stellar_asset_contract_v2(admin.clone()).address()
+    env.register_stellar_asset_contract_v2(admin.clone())
+        .address()
 }
 
 fn mint(env: &Env, token_addr: &Address, to: &Address, amount: i128) {
@@ -17,7 +18,15 @@ fn mint(env: &Env, token_addr: &Address, to: &Address, amount: i128) {
     sac.mint(to, &amount);
 }
 
-fn setup(env: &Env) -> (MultisigTreasuryContractClient, Address, Vec<Address>, Address, Address) {
+fn setup(
+    env: &Env,
+) -> (
+    MultisigTreasuryContractClient<'_>,
+    Address,
+    Vec<Address>,
+    Address,
+    Address,
+) {
     let admin = Address::generate(env);
     let signer1 = Address::generate(env);
     let signer2 = Address::generate(env);
@@ -124,7 +133,12 @@ fn test_propose_transaction() {
     let proposer = signers.get(0).unwrap();
 
     let tx_id = client.propose_transaction(
-        &proposer, &recipient, &token_addr, &10_000i128, &make_desc(&env), &86_400u64,
+        &proposer,
+        &recipient,
+        &token_addr,
+        &10_000i128,
+        &make_desc(&env),
+        &86_400u64,
     );
 
     assert_eq!(tx_id, 1);
@@ -146,7 +160,14 @@ fn test_propose_by_non_signer() {
     let stranger = Address::generate(&env);
     let recipient = Address::generate(&env);
 
-    client.propose_transaction(&stranger, &recipient, &token_addr, &10_000i128, &make_desc(&env), &86_400u64);
+    client.propose_transaction(
+        &stranger,
+        &recipient,
+        &token_addr,
+        &10_000i128,
+        &make_desc(&env),
+        &86_400u64,
+    );
 }
 
 #[test]
@@ -159,7 +180,14 @@ fn test_propose_zero_amount() {
     let proposer = signers.get(0).unwrap();
     let recipient = Address::generate(&env);
 
-    client.propose_transaction(&proposer, &recipient, &token_addr, &0i128, &make_desc(&env), &86_400u64);
+    client.propose_transaction(
+        &proposer,
+        &recipient,
+        &token_addr,
+        &0i128,
+        &make_desc(&env),
+        &86_400u64,
+    );
 }
 
 // ─── approve_transaction ─────────────────────────────────────────────────────
@@ -174,7 +202,14 @@ fn test_approve_transaction() {
     let signer2 = signers.get(1).unwrap();
     let recipient = Address::generate(&env);
 
-    let tx_id = client.propose_transaction(&proposer, &recipient, &token_addr, &10_000i128, &make_desc(&env), &86_400u64);
+    let tx_id = client.propose_transaction(
+        &proposer,
+        &recipient,
+        &token_addr,
+        &10_000i128,
+        &make_desc(&env),
+        &86_400u64,
+    );
 
     client.approve_transaction(&proposer, &tx_id);
     let tx = client.get_transaction(&tx_id).unwrap();
@@ -197,7 +232,14 @@ fn test_approve_twice() {
     let proposer = signers.get(0).unwrap();
     let recipient = Address::generate(&env);
 
-    let tx_id = client.propose_transaction(&proposer, &recipient, &token_addr, &10_000i128, &make_desc(&env), &86_400u64);
+    let tx_id = client.propose_transaction(
+        &proposer,
+        &recipient,
+        &token_addr,
+        &10_000i128,
+        &make_desc(&env),
+        &86_400u64,
+    );
 
     client.approve_transaction(&proposer, &tx_id);
     client.approve_transaction(&proposer, &tx_id);
@@ -214,7 +256,14 @@ fn test_approve_by_non_signer() {
     let stranger = Address::generate(&env);
     let recipient = Address::generate(&env);
 
-    let tx_id = client.propose_transaction(&proposer, &recipient, &token_addr, &10_000i128, &make_desc(&env), &86_400u64);
+    let tx_id = client.propose_transaction(
+        &proposer,
+        &recipient,
+        &token_addr,
+        &10_000i128,
+        &make_desc(&env),
+        &86_400u64,
+    );
 
     client.approve_transaction(&stranger, &tx_id);
 }
@@ -229,9 +278,18 @@ fn test_approve_expired_transaction() {
     let proposer = signers.get(0).unwrap();
     let recipient = Address::generate(&env);
 
-    let tx_id = client.propose_transaction(&proposer, &recipient, &token_addr, &10_000i128, &make_desc(&env), &100u64);
+    let tx_id = client.propose_transaction(
+        &proposer,
+        &recipient,
+        &token_addr,
+        &10_000i128,
+        &make_desc(&env),
+        &100u64,
+    );
 
-    env.ledger().with_mut(|li| { li.timestamp = 200; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 200;
+    });
 
     client.approve_transaction(&proposer, &tx_id);
 }
@@ -258,7 +316,14 @@ fn test_execute_transaction() {
     mint(&env, &token_addr, &contract_id, 1_000_000);
 
     let recipient = Address::generate(&env);
-    let tx_id = client.propose_transaction(&signer1, &recipient, &token_addr, &50_000i128, &make_desc(&env), &86_400u64);
+    let tx_id = client.propose_transaction(
+        &signer1,
+        &recipient,
+        &token_addr,
+        &50_000i128,
+        &make_desc(&env),
+        &86_400u64,
+    );
 
     client.approve_transaction(&signer1, &tx_id);
     client.approve_transaction(&signer2, &tx_id);
@@ -283,7 +348,14 @@ fn test_execute_pending_transaction() {
     let proposer = signers.get(0).unwrap();
     let recipient = Address::generate(&env);
 
-    let tx_id = client.propose_transaction(&proposer, &recipient, &token_addr, &10_000i128, &make_desc(&env), &86_400u64);
+    let tx_id = client.propose_transaction(
+        &proposer,
+        &recipient,
+        &token_addr,
+        &10_000i128,
+        &make_desc(&env),
+        &86_400u64,
+    );
 
     // Not yet approved → should panic
     client.execute_transaction(&proposer, &tx_id);
@@ -301,7 +373,14 @@ fn test_reject_transaction() {
     let signer2 = signers.get(1).unwrap();
     let recipient = Address::generate(&env);
 
-    let tx_id = client.propose_transaction(&proposer, &recipient, &token_addr, &10_000i128, &make_desc(&env), &86_400u64);
+    let tx_id = client.propose_transaction(
+        &proposer,
+        &recipient,
+        &token_addr,
+        &10_000i128,
+        &make_desc(&env),
+        &86_400u64,
+    );
 
     // 3 signers, required=2 → need 2+ rejections to get Rejected status
     client.reject_transaction(&proposer, &tx_id);
@@ -326,7 +405,14 @@ fn test_reject_by_non_signer() {
     let stranger = Address::generate(&env);
     let recipient = Address::generate(&env);
 
-    let tx_id = client.propose_transaction(&proposer, &recipient, &token_addr, &10_000i128, &make_desc(&env), &86_400u64);
+    let tx_id = client.propose_transaction(
+        &proposer,
+        &recipient,
+        &token_addr,
+        &10_000i128,
+        &make_desc(&env),
+        &86_400u64,
+    );
 
     client.reject_transaction(&stranger, &tx_id);
 }

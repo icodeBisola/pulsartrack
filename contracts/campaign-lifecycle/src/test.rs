@@ -1,13 +1,10 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    Address, Env, String,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-fn setup(env: &Env) -> (CampaignLifecycleContractClient, Address) {
+fn setup(env: &Env) -> (CampaignLifecycleContractClient<'_>, Address) {
     let admin = Address::generate(env);
 
     let contract_id = env.register_contract(None, CampaignLifecycleContract);
@@ -89,7 +86,12 @@ fn test_transition_draft_to_pending_review() {
     let advertiser = Address::generate(&env);
 
     client.register_campaign(&advertiser, &1u64, &10_000u32);
-    client.transition(&advertiser, &1u64, &LifecycleState::PendingReview, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::PendingReview,
+        &make_reason(&env),
+    );
 
     let lc = client.get_lifecycle(&1u64).unwrap();
     assert!(matches!(lc.state, LifecycleState::PendingReview));
@@ -104,7 +106,12 @@ fn test_transition_pending_to_active() {
     let advertiser = Address::generate(&env);
 
     client.register_campaign(&advertiser, &1u64, &10_000u32);
-    client.transition(&advertiser, &1u64, &LifecycleState::PendingReview, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::PendingReview,
+        &make_reason(&env),
+    );
     client.transition(&admin, &1u64, &LifecycleState::Active, &make_reason(&env));
 
     let lc = client.get_lifecycle(&1u64).unwrap();
@@ -120,9 +127,19 @@ fn test_transition_active_to_paused() {
     let advertiser = Address::generate(&env);
 
     client.register_campaign(&advertiser, &1u64, &10_000u32);
-    client.transition(&advertiser, &1u64, &LifecycleState::PendingReview, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::PendingReview,
+        &make_reason(&env),
+    );
     client.transition(&admin, &1u64, &LifecycleState::Active, &make_reason(&env));
-    client.transition(&advertiser, &1u64, &LifecycleState::Paused, &String::from_str(&env, "budget review"));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::Paused,
+        &String::from_str(&env, "budget review"),
+    );
 
     let lc = client.get_lifecycle(&1u64).unwrap();
     assert!(matches!(lc.state, LifecycleState::Paused));
@@ -138,10 +155,25 @@ fn test_transition_paused_to_active() {
     let advertiser = Address::generate(&env);
 
     client.register_campaign(&advertiser, &1u64, &10_000u32);
-    client.transition(&advertiser, &1u64, &LifecycleState::PendingReview, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::PendingReview,
+        &make_reason(&env),
+    );
     client.transition(&admin, &1u64, &LifecycleState::Active, &make_reason(&env));
-    client.transition(&advertiser, &1u64, &LifecycleState::Paused, &String::from_str(&env, "pause"));
-    client.transition(&advertiser, &1u64, &LifecycleState::Active, &String::from_str(&env, "resume"));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::Paused,
+        &String::from_str(&env, "pause"),
+    );
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::Active,
+        &String::from_str(&env, "resume"),
+    );
 
     let lc = client.get_lifecycle(&1u64).unwrap();
     assert!(matches!(lc.state, LifecycleState::Active));
@@ -155,9 +187,19 @@ fn test_transition_active_to_completed() {
     let advertiser = Address::generate(&env);
 
     client.register_campaign(&advertiser, &1u64, &10_000u32);
-    client.transition(&advertiser, &1u64, &LifecycleState::PendingReview, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::PendingReview,
+        &make_reason(&env),
+    );
     client.transition(&admin, &1u64, &LifecycleState::Active, &make_reason(&env));
-    client.transition(&advertiser, &1u64, &LifecycleState::Completed, &String::from_str(&env, "campaign ended"));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::Completed,
+        &String::from_str(&env, "campaign ended"),
+    );
 
     let lc = client.get_lifecycle(&1u64).unwrap();
     assert!(matches!(lc.state, LifecycleState::Completed));
@@ -172,7 +214,12 @@ fn test_transition_draft_to_cancelled() {
     let advertiser = Address::generate(&env);
 
     client.register_campaign(&advertiser, &1u64, &10_000u32);
-    client.transition(&advertiser, &1u64, &LifecycleState::Cancelled, &String::from_str(&env, "changed mind"));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::Cancelled,
+        &String::from_str(&env, "changed mind"),
+    );
 
     let lc = client.get_lifecycle(&1u64).unwrap();
     assert!(matches!(lc.state, LifecycleState::Cancelled));
@@ -191,7 +238,12 @@ fn test_invalid_transition_draft_to_active() {
 
     client.register_campaign(&advertiser, &1u64, &10_000u32);
     // Draft → Active is invalid; must go through PendingReview first
-    client.transition(&advertiser, &1u64, &LifecycleState::Active, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::Active,
+        &make_reason(&env),
+    );
 }
 
 #[test]
@@ -203,11 +255,26 @@ fn test_invalid_transition_completed_to_active() {
     let advertiser = Address::generate(&env);
 
     client.register_campaign(&advertiser, &1u64, &10_000u32);
-    client.transition(&advertiser, &1u64, &LifecycleState::PendingReview, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::PendingReview,
+        &make_reason(&env),
+    );
     client.transition(&admin, &1u64, &LifecycleState::Active, &make_reason(&env));
-    client.transition(&advertiser, &1u64, &LifecycleState::Completed, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::Completed,
+        &make_reason(&env),
+    );
     // Completed → Active is invalid
-    client.transition(&advertiser, &1u64, &LifecycleState::Active, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::Active,
+        &make_reason(&env),
+    );
 }
 
 // ─── transition (access control) ─────────────────────────────────────────────
@@ -222,7 +289,12 @@ fn test_transition_by_stranger() {
     let stranger = Address::generate(&env);
 
     client.register_campaign(&advertiser, &1u64, &10_000u32);
-    client.transition(&stranger, &1u64, &LifecycleState::PendingReview, &make_reason(&env));
+    client.transition(
+        &stranger,
+        &1u64,
+        &LifecycleState::PendingReview,
+        &make_reason(&env),
+    );
 }
 
 // ─── pause_for_fraud ─────────────────────────────────────────────────────────
@@ -245,12 +317,21 @@ fn test_pause_for_fraud() {
 
     client.set_fraud_contract(&admin, &fraud_contract);
     client.register_campaign(&advertiser, &1u64, &10_000u32);
-    client.transition(&advertiser, &1u64, &LifecycleState::PendingReview, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::PendingReview,
+        &make_reason(&env),
+    );
     client.transition(&admin, &1u64, &LifecycleState::Active, &make_reason(&env));
 
     // Fraud contract can call transition to pause
-    client.transition(&fraud_contract, &1u64, &LifecycleState::Paused,
-        &String::from_str(&env, "paused for fraud detection"));
+    client.transition(
+        &fraud_contract,
+        &1u64,
+        &LifecycleState::Paused,
+        &String::from_str(&env, "paused for fraud detection"),
+    );
 
     let lc = client.get_lifecycle(&1u64).unwrap();
     assert!(matches!(lc.state, LifecycleState::Paused));
@@ -269,7 +350,12 @@ fn test_pause_for_fraud_wrong_contract() {
 
     client.set_fraud_contract(&admin, &fraud_contract);
     client.register_campaign(&advertiser, &1u64, &10_000u32);
-    client.transition(&advertiser, &1u64, &LifecycleState::PendingReview, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::PendingReview,
+        &make_reason(&env),
+    );
     client.transition(&admin, &1u64, &LifecycleState::Active, &make_reason(&env));
 
     client.pause_for_fraud(&wrong_contract, &1u64);
@@ -479,7 +565,12 @@ fn test_transition_recorded() {
     let advertiser = Address::generate(&env);
 
     client.register_campaign(&advertiser, &1u64, &10_000u32);
-    client.transition(&advertiser, &1u64, &LifecycleState::PendingReview, &make_reason(&env));
+    client.transition(
+        &advertiser,
+        &1u64,
+        &LifecycleState::PendingReview,
+        &make_reason(&env),
+    );
 
     assert_eq!(client.get_transition_count(&1u64), 1);
 

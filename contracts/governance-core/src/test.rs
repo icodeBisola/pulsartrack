@@ -2,7 +2,7 @@
 use super::*;
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
-fn setup(env: &Env) -> (GovernanceCoreContractClient, Address) {
+fn setup(env: &Env) -> (GovernanceCoreContractClient<'_>, Address) {
     let admin = Address::generate(env);
     let id = env.register_contract(None, GovernanceCoreContract);
     let c = GovernanceCoreContractClient::new(env, &id);
@@ -11,15 +11,22 @@ fn setup(env: &Env) -> (GovernanceCoreContractClient, Address) {
 }
 
 #[test]
-fn test_initialize() { let env = Env::default(); env.mock_all_auths(); setup(&env); }
+fn test_initialize() {
+    let env = Env::default();
+    env.mock_all_auths();
+    setup(&env);
+}
 
 #[test]
 #[should_panic(expected = "already initialized")]
 fn test_initialize_twice() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let id = env.register_contract(None, GovernanceCoreContract);
     let c = GovernanceCoreContractClient::new(&env, &id);
-    let a = Address::generate(&env); c.initialize(&a); c.initialize(&a);
+    let a = Address::generate(&env);
+    c.initialize(&a);
+    c.initialize(&a);
 }
 
 #[test]
@@ -33,7 +40,8 @@ fn test_initialize_non_admin_fails() {
 
 #[test]
 fn test_grant_role() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let account = Address::generate(&env);
     c.grant_role(&admin, &account, &Role::Operator, &None);
@@ -42,7 +50,8 @@ fn test_grant_role() {
 
 #[test]
 fn test_grant_role_with_expiry() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let account = Address::generate(&env);
     c.grant_role(&admin, &account, &Role::Operator, &Some(86_400u64));
@@ -53,14 +62,21 @@ fn test_grant_role_with_expiry() {
 #[test]
 #[should_panic(expected = "unauthorized")]
 fn test_grant_role_unauthorized() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
-    c.grant_role(&Address::generate(&env), &Address::generate(&env), &Role::Operator, &None);
+    c.grant_role(
+        &Address::generate(&env),
+        &Address::generate(&env),
+        &Role::Operator,
+        &None,
+    );
 }
 
 #[test]
 fn test_revoke_role() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let account = Address::generate(&env);
     c.grant_role(&admin, &account, &Role::Operator, &None);
@@ -71,14 +87,16 @@ fn test_revoke_role() {
 
 #[test]
 fn test_has_role_false() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
     assert!(!c.has_role(&Address::generate(&env), &Role::Operator));
 }
 
 #[test]
 fn test_update_params() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let params = GovernanceParams {
         min_proposal_threshold: 1000,
@@ -95,7 +113,10 @@ fn test_update_params() {
 
 #[test]
 fn test_get_role_grant_nonexistent() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
-    assert!(c.get_role_grant(&Address::generate(&env), &Role::Operator).is_none());
+    assert!(c
+        .get_role_grant(&Address::generate(&env), &Role::Operator)
+        .is_none());
 }

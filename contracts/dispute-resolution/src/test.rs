@@ -9,7 +9,8 @@ use soroban_sdk::{
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 fn deploy_token(env: &Env, admin: &Address) -> Address {
-    env.register_stellar_asset_contract_v2(admin.clone()).address()
+    env.register_stellar_asset_contract_v2(admin.clone())
+        .address()
 }
 
 fn mint(env: &Env, token_addr: &Address, to: &Address, amount: i128) {
@@ -17,7 +18,14 @@ fn mint(env: &Env, token_addr: &Address, to: &Address, amount: i128) {
     sac.mint(to, &amount);
 }
 
-fn setup(env: &Env) -> (DisputeResolutionContractClient, Address, Address, Address) {
+fn setup(
+    env: &Env,
+) -> (
+    DisputeResolutionContractClient<'_>,
+    Address,
+    Address,
+    Address,
+) {
     let admin = Address::generate(env);
     let token_admin = Address::generate(env);
     let token_addr = deploy_token(env, &token_admin);
@@ -75,7 +83,7 @@ fn test_initialize_twice() {
 #[should_panic]
 fn test_initialize_non_admin_fails() {
     let env = Env::default();
-    
+
     let contract_id = env.register_contract(None, DisputeResolutionContract);
     let client = DisputeResolutionContractClient::new(&env, &contract_id);
 
@@ -156,8 +164,22 @@ fn test_file_multiple_disputes() {
     let respondent = Address::generate(&env);
     mint(&env, &token_addr, &claimant, 1_000_000);
 
-    let id1 = client.file_dispute(&claimant, &respondent, &1u64, &10_000i128, &make_desc(&env), &make_evidence(&env));
-    let id2 = client.file_dispute(&claimant, &respondent, &2u64, &20_000i128, &make_desc(&env), &make_evidence(&env));
+    let id1 = client.file_dispute(
+        &claimant,
+        &respondent,
+        &1u64,
+        &10_000i128,
+        &make_desc(&env),
+        &make_evidence(&env),
+    );
+    let id2 = client.file_dispute(
+        &claimant,
+        &respondent,
+        &2u64,
+        &20_000i128,
+        &make_desc(&env),
+        &make_evidence(&env),
+    );
 
     assert_eq!(id1, 1);
     assert_eq!(id2, 2);
@@ -177,7 +199,14 @@ fn test_assign_arbitrator() {
     let arbitrator = Address::generate(&env);
     mint(&env, &token_addr, &claimant, 1_000_000);
 
-    let dispute_id = client.file_dispute(&claimant, &respondent, &1u64, &50_000i128, &make_desc(&env), &make_evidence(&env));
+    let dispute_id = client.file_dispute(
+        &claimant,
+        &respondent,
+        &1u64,
+        &50_000i128,
+        &make_desc(&env),
+        &make_evidence(&env),
+    );
 
     client.authorize_arbitrator(&admin, &arbitrator);
     client.assign_arbitrator(&admin, &dispute_id, &arbitrator);
@@ -200,7 +229,14 @@ fn test_assign_arbitrator_by_stranger() {
     let stranger = Address::generate(&env);
     mint(&env, &token_addr, &claimant, 1_000_000);
 
-    let dispute_id = client.file_dispute(&claimant, &respondent, &1u64, &50_000i128, &make_desc(&env), &make_evidence(&env));
+    let dispute_id = client.file_dispute(
+        &claimant,
+        &respondent,
+        &1u64,
+        &50_000i128,
+        &make_desc(&env),
+        &make_evidence(&env),
+    );
     client.authorize_arbitrator(&admin, &arbitrator);
     client.assign_arbitrator(&stranger, &dispute_id, &arbitrator);
 }
@@ -217,7 +253,14 @@ fn test_assign_unauthorized_arbitrator() {
     let arbitrator = Address::generate(&env);
     mint(&env, &token_addr, &claimant, 1_000_000);
 
-    let dispute_id = client.file_dispute(&claimant, &respondent, &1u64, &50_000i128, &make_desc(&env), &make_evidence(&env));
+    let dispute_id = client.file_dispute(
+        &claimant,
+        &respondent,
+        &1u64,
+        &50_000i128,
+        &make_desc(&env),
+        &make_evidence(&env),
+    );
     // arbitrator not authorized first
     client.assign_arbitrator(&admin, &dispute_id, &arbitrator);
 }
@@ -235,13 +278,27 @@ fn test_resolve_dispute() {
     let arbitrator = Address::generate(&env);
     mint(&env, &token_addr, &claimant, 1_000_000);
 
-    let dispute_id = client.file_dispute(&claimant, &respondent, &1u64, &50_000i128, &make_desc(&env), &make_evidence(&env));
+    let dispute_id = client.file_dispute(
+        &claimant,
+        &respondent,
+        &1u64,
+        &50_000i128,
+        &make_desc(&env),
+        &make_evidence(&env),
+    );
     client.authorize_arbitrator(&admin, &arbitrator);
     client.assign_arbitrator(&admin, &dispute_id, &arbitrator);
 
-    env.ledger().with_mut(|li| { li.timestamp = 1000; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 1000;
+    });
 
-    client.resolve_dispute(&arbitrator, &dispute_id, &DisputeOutcome::Claimant, &String::from_str(&env, "claimant wins"));
+    client.resolve_dispute(
+        &arbitrator,
+        &dispute_id,
+        &DisputeOutcome::Claimant,
+        &String::from_str(&env, "claimant wins"),
+    );
 
     let dispute = client.get_dispute(&dispute_id).unwrap();
     assert!(matches!(dispute.status, DisputeStatus::Resolved));
@@ -262,11 +319,23 @@ fn test_resolve_by_wrong_arbitrator() {
     let wrong_arb = Address::generate(&env);
     mint(&env, &token_addr, &claimant, 1_000_000);
 
-    let dispute_id = client.file_dispute(&claimant, &respondent, &1u64, &50_000i128, &make_desc(&env), &make_evidence(&env));
+    let dispute_id = client.file_dispute(
+        &claimant,
+        &respondent,
+        &1u64,
+        &50_000i128,
+        &make_desc(&env),
+        &make_evidence(&env),
+    );
     client.authorize_arbitrator(&admin, &arbitrator);
     client.assign_arbitrator(&admin, &dispute_id, &arbitrator);
 
-    client.resolve_dispute(&wrong_arb, &dispute_id, &DisputeOutcome::Respondent, &String::from_str(&env, "wrong"));
+    client.resolve_dispute(
+        &wrong_arb,
+        &dispute_id,
+        &DisputeOutcome::Respondent,
+        &String::from_str(&env, "wrong"),
+    );
 }
 
 // ─── read-only ───────────────────────────────────────────────────────────────

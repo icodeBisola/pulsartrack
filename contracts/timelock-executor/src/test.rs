@@ -7,7 +7,7 @@ use soroban_sdk::{
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-fn setup(env: &Env) -> (TimelockExecutorContractClient, Address, Address) {
+fn setup(env: &Env) -> (TimelockExecutorContractClient<'_>, Address, Address) {
     let admin = Address::generate(env);
     let executor = Address::generate(env);
 
@@ -94,7 +94,13 @@ fn test_queue_by_non_admin() {
     let stranger = Address::generate(&env);
     let target = Address::generate(&env);
 
-    client.queue(&stranger, &target, &make_fn(&env), &make_desc(&env), &500u64);
+    client.queue(
+        &stranger,
+        &target,
+        &make_fn(&env),
+        &make_desc(&env),
+        &500u64,
+    );
 }
 
 #[test]
@@ -118,7 +124,13 @@ fn test_queue_delay_too_long() {
     let target = Address::generate(&env);
 
     // max_delay=86_400, so 100_000 is too long
-    client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &100_000u64);
+    client.queue(
+        &admin,
+        &target,
+        &make_fn(&env),
+        &make_desc(&env),
+        &100_000u64,
+    );
 }
 
 // ─── execute ─────────────────────────────────────────────────────────────────
@@ -133,7 +145,9 @@ fn test_execute_entry() {
     let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
 
     // Advance past ETA but within grace period
-    env.ledger().with_mut(|li| { li.timestamp = 600; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 600;
+    });
 
     client.execute(&executor, &entry_id);
 
@@ -166,7 +180,9 @@ fn test_execute_wrong_executor() {
     let stranger = Address::generate(&env);
 
     let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
-    env.ledger().with_mut(|li| { li.timestamp = 600; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 600;
+    });
 
     client.execute(&stranger, &entry_id);
 }
@@ -183,7 +199,9 @@ fn test_execute_after_grace_period() {
 
     // grace_period = 172_800 (2 days), ETA = 500
     // Advance way beyond grace period
-    env.ledger().with_mut(|li| { li.timestamp = 500 + 172_800 + 1; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 500 + 172_800 + 1;
+    });
 
     client.execute(&executor, &entry_id);
 }
@@ -251,7 +269,9 @@ fn test_is_ready_at_eta() {
     let target = Address::generate(&env);
 
     let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
-    env.ledger().with_mut(|li| { li.timestamp = 500; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 500;
+    });
 
     assert!(client.is_ready(&entry_id));
 }

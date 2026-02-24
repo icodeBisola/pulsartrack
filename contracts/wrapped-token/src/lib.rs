@@ -2,10 +2,7 @@
 //! Manages wrapped tokens from other chains for use in PulsarTrack campaigns on Stellar.
 
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    token, Address, Env, String,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String};
 
 #[contracttype]
 #[derive(Clone)]
@@ -27,7 +24,7 @@ pub struct WrapRecord {
     pub user: Address,
     pub token: String,
     pub amount: i128,
-    pub source_tx: String,  // Transaction ID on source chain
+    pub source_tx: String, // Transaction ID on source chain
     pub wrapped_at: u64,
 }
 
@@ -36,9 +33,9 @@ pub enum DataKey {
     Admin,
     RelayerAddress,
     WrapRecordCounter,
-    WrappedToken(String),  // symbol
+    WrappedToken(String), // symbol
     WrapRecord(u64),
-    UserBalance(String, Address),  // symbol, user
+    UserBalance(String, Address), // symbol, user
 }
 
 const INSTANCE_LIFETIME_THRESHOLD: u32 = 17_280;
@@ -52,14 +49,20 @@ pub struct WrappedTokenContract;
 #[contractimpl]
 impl WrappedTokenContract {
     pub fn initialize(env: Env, admin: Address, relayer: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::RelayerAddress, &relayer);
-        env.storage().instance().set(&DataKey::WrapRecordCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::RelayerAddress, &relayer);
+        env.storage()
+            .instance()
+            .set(&DataKey::WrapRecordCounter, &0u64);
     }
 
     pub fn register_wrapped_token(
@@ -72,7 +75,9 @@ impl WrappedTokenContract {
         underlying_address: String,
         stellar_token: Address,
     ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -92,7 +97,11 @@ impl WrappedTokenContract {
 
         let _ttl_key = DataKey::WrappedToken(symbol);
         env.storage().persistent().set(&_ttl_key, &wrapped);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn mint_wrapped(
@@ -103,9 +112,15 @@ impl WrappedTokenContract {
         amount: i128,
         source_tx: String,
     ) -> u64 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         relayer.require_auth();
-        let stored_relayer: Address = env.storage().instance().get(&DataKey::RelayerAddress).unwrap();
+        let stored_relayer: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::RelayerAddress)
+            .unwrap();
         if relayer != stored_relayer {
             panic!("unauthorized relayer");
         }
@@ -126,14 +141,26 @@ impl WrappedTokenContract {
         let key = DataKey::UserBalance(symbol.clone(), recipient.clone());
         let current: i128 = env.storage().persistent().get(&key).unwrap_or(0);
         env.storage().persistent().set(&key, &(current + amount));
-        env.storage().persistent().extend_ttl(&key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         wrapped.total_wrapped += amount;
         let _ttl_key = DataKey::WrappedToken(symbol.clone());
         env.storage().persistent().set(&_ttl_key, &wrapped);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
-        let counter: u64 = env.storage().instance().get(&DataKey::WrapRecordCounter).unwrap_or(0);
+        let counter: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::WrapRecordCounter)
+            .unwrap_or(0);
         let record_id = counter + 1;
 
         let record = WrapRecord {
@@ -147,8 +174,14 @@ impl WrappedTokenContract {
 
         let _ttl_key = DataKey::WrapRecord(record_id);
         env.storage().persistent().set(&_ttl_key, &record);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
-        env.storage().instance().set(&DataKey::WrapRecordCounter, &record_id);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::WrapRecordCounter, &record_id);
 
         env.events().publish(
             (symbol_short!("wrapped"), symbol_short!("minted")),
@@ -158,8 +191,16 @@ impl WrappedTokenContract {
         record_id
     }
 
-    pub fn burn_wrapped(env: Env, user: Address, symbol: String, amount: i128, target_address: String) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    pub fn burn_wrapped(
+        env: Env,
+        user: Address,
+        symbol: String,
+        amount: i128,
+        target_address: String,
+    ) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         user.require_auth();
 
         let key = DataKey::UserBalance(symbol.clone(), user.clone());
@@ -170,7 +211,11 @@ impl WrappedTokenContract {
         }
 
         env.storage().persistent().set(&key, &(current - amount));
-        env.storage().persistent().extend_ttl(&key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         let mut wrapped: WrappedToken = env
             .storage()
@@ -181,7 +226,11 @@ impl WrappedTokenContract {
         wrapped.total_wrapped -= amount;
         let _ttl_key = DataKey::WrappedToken(symbol);
         env.storage().persistent().set(&_ttl_key, &wrapped);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("wrapped"), symbol_short!("burned")),
@@ -190,13 +239,22 @@ impl WrappedTokenContract {
     }
 
     pub fn get_wrapped_token(env: Env, symbol: String) -> Option<WrappedToken> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::WrappedToken(symbol))
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::WrappedToken(symbol))
     }
 
     pub fn get_user_balance(env: Env, symbol: String, user: Address) -> i128 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::UserBalance(symbol, user)).unwrap_or(0)
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::UserBalance(symbol, user))
+            .unwrap_or(0)
     }
 }
 

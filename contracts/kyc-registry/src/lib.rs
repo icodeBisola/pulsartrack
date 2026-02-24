@@ -2,18 +2,15 @@
 //! Know Your Customer verification registry for compliance on Stellar.
 
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    Address, Env, String,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String};
 
 #[contracttype]
 #[derive(Clone, PartialEq, Debug)]
 pub enum KycLevel {
     None,
-    Basic,     // Email + Phone verified
-    Standard,  // ID document verified
-    Enhanced,  // Full KYC with AML checks
+    Basic,    // Email + Phone verified
+    Standard, // ID document verified
+    Enhanced, // Full KYC with AML checks
 }
 
 #[contracttype]
@@ -22,7 +19,7 @@ pub struct KycRecord {
     pub account: Address,
     pub level: KycLevel,
     pub provider: String,
-    pub document_hash: String,  // Hash of KYC documents
+    pub document_hash: String, // Hash of KYC documents
     pub jurisdiction: String,
     pub verified: bool,
     pub submitted_at: u64,
@@ -45,7 +42,7 @@ pub enum DataKey {
     Admin,
     KycRecord(Address),
     Provider(Address),
-    RequiredLevel(String),  // operation -> required KYC level
+    RequiredLevel(String), // operation -> required KYC level
 }
 
 const INSTANCE_LIFETIME_THRESHOLD: u32 = 17_280;
@@ -59,7 +56,9 @@ pub struct KycRegistryContract;
 #[contractimpl]
 impl KycRegistryContract {
     pub fn initialize(env: Env, admin: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
@@ -68,7 +67,9 @@ impl KycRegistryContract {
     }
 
     pub fn register_provider(env: Env, admin: Address, provider: Address, name: String) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -84,7 +85,11 @@ impl KycRegistryContract {
 
         let _ttl_key = DataKey::Provider(provider);
         env.storage().persistent().set(&_ttl_key, &kyc_provider);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn submit_kyc(
@@ -95,7 +100,9 @@ impl KycRegistryContract {
         document_hash: String,
         jurisdiction: String,
     ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         account.require_auth();
 
         let kyc_provider: KycProvider = env
@@ -123,7 +130,11 @@ impl KycRegistryContract {
 
         let _ttl_key = DataKey::KycRecord(account.clone());
         env.storage().persistent().set(&_ttl_key, &record);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("kyc"), symbol_short!("submitted")),
@@ -131,13 +142,10 @@ impl KycRegistryContract {
         );
     }
 
-    pub fn verify_kyc(
-        env: Env,
-        provider: Address,
-        account: Address,
-        expires_in_secs: Option<u64>,
-    ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    pub fn verify_kyc(env: Env, provider: Address, account: Address, expires_in_secs: Option<u64>) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         provider.require_auth();
 
         let mut provider_data: KycProvider = env
@@ -164,21 +172,29 @@ impl KycRegistryContract {
 
         let _ttl_key = DataKey::KycRecord(account.clone());
         env.storage().persistent().set(&_ttl_key, &record);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         provider_data.total_verifications += 1;
         let _ttl_key = DataKey::Provider(provider);
         env.storage().persistent().set(&_ttl_key, &provider_data);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
-
-        env.events().publish(
-            (symbol_short!("kyc"), symbol_short!("verified")),
-            account,
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
         );
+
+        env.events()
+            .publish((symbol_short!("kyc"), symbol_short!("verified")), account);
     }
 
     pub fn revoke_kyc(env: Env, admin: Address, account: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -194,12 +210,22 @@ impl KycRegistryContract {
         record.verified = false;
         let _ttl_key = DataKey::KycRecord(account);
         env.storage().persistent().set(&_ttl_key, &record);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn is_kyc_valid(env: Env, account: Address) -> bool {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        if let Some(record) = env.storage().persistent().get::<DataKey, KycRecord>(&DataKey::KycRecord(account)) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, KycRecord>(&DataKey::KycRecord(account))
+        {
             if !record.verified {
                 return false;
             }
@@ -214,13 +240,21 @@ impl KycRegistryContract {
     }
 
     pub fn get_kyc_record(env: Env, account: Address) -> Option<KycRecord> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage().persistent().get(&DataKey::KycRecord(account))
     }
 
     pub fn get_kyc_level(env: Env, account: Address) -> KycLevel {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        if let Some(record) = env.storage().persistent().get::<DataKey, KycRecord>(&DataKey::KycRecord(account)) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, KycRecord>(&DataKey::KycRecord(account))
+        {
             if record.verified {
                 record.level
             } else {

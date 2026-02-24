@@ -2,10 +2,7 @@
 //! On-chain anomaly detection for ad campaign traffic on Stellar.
 
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    Address, Env, String,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String};
 
 #[contracttype]
 #[derive(Clone)]
@@ -36,7 +33,7 @@ pub struct AnomalyReport {
     pub anomaly_type: AnomalyType,
     pub severity: AnomalySeverity,
     pub description: String,
-    pub metrics_snapshot: String,  // JSON snapshot of metrics at detection time
+    pub metrics_snapshot: String, // JSON snapshot of metrics at detection time
     pub auto_action_taken: bool,
     pub reported_at: u64,
     pub resolved: bool,
@@ -49,7 +46,7 @@ pub struct TrafficBaseline {
     pub campaign_id: u64,
     pub avg_impressions_per_hour: u64,
     pub avg_clicks_per_hour: u64,
-    pub spike_threshold_pct: u32,  // % increase to trigger alert
+    pub spike_threshold_pct: u32, // % increase to trigger alert
     pub last_updated: u64,
 }
 
@@ -60,7 +57,7 @@ pub enum DataKey {
     ReportCounter,
     SpikeThreshold,
     Report(u64),
-    Baseline(u64),        // campaign_id
+    Baseline(u64), // campaign_id
     FlaggedPublisher(Address),
 }
 
@@ -75,15 +72,21 @@ pub struct AnomalyDetectorContract;
 #[contractimpl]
 impl AnomalyDetectorContract {
     pub fn initialize(env: Env, admin: Address, oracle: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::OracleAddress, &oracle);
+        env.storage()
+            .instance()
+            .set(&DataKey::OracleAddress, &oracle);
         env.storage().instance().set(&DataKey::ReportCounter, &0u64);
-        env.storage().instance().set(&DataKey::SpikeThreshold, &300u32); // 300% = 3x normal
+        env.storage()
+            .instance()
+            .set(&DataKey::SpikeThreshold, &300u32); // 300% = 3x normal
     }
 
     pub fn set_baseline(
@@ -94,9 +97,15 @@ impl AnomalyDetectorContract {
         avg_clicks: u64,
         spike_threshold: u32,
     ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         oracle.require_auth();
-        let stored_oracle: Address = env.storage().instance().get(&DataKey::OracleAddress).unwrap();
+        let stored_oracle: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::OracleAddress)
+            .unwrap();
         if oracle != stored_oracle {
             panic!("unauthorized");
         }
@@ -111,7 +120,11 @@ impl AnomalyDetectorContract {
 
         let _ttl_key = DataKey::Baseline(campaign_id);
         env.storage().persistent().set(&_ttl_key, &baseline);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn report_anomaly(
@@ -125,14 +138,24 @@ impl AnomalyDetectorContract {
         metrics_snapshot: String,
         auto_action: bool,
     ) -> u64 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         oracle.require_auth();
-        let stored_oracle: Address = env.storage().instance().get(&DataKey::OracleAddress).unwrap();
+        let stored_oracle: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::OracleAddress)
+            .unwrap();
         if oracle != stored_oracle {
             panic!("unauthorized");
         }
 
-        let counter: u64 = env.storage().instance().get(&DataKey::ReportCounter).unwrap_or(0);
+        let counter: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ReportCounter)
+            .unwrap_or(0);
         let report_id = counter + 1;
 
         // Auto-flag critical publisher anomalies
@@ -141,7 +164,11 @@ impl AnomalyDetectorContract {
                 AnomalySeverity::Critical => {
                     let _ttl_key = DataKey::FlaggedPublisher(pub_addr.clone());
                     env.storage().persistent().set(&_ttl_key, &true);
-                    env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+                    env.storage().persistent().extend_ttl(
+                        &_ttl_key,
+                        PERSISTENT_LIFETIME_THRESHOLD,
+                        PERSISTENT_BUMP_AMOUNT,
+                    );
                 }
                 _ => {}
             }
@@ -163,8 +190,14 @@ impl AnomalyDetectorContract {
 
         let _ttl_key = DataKey::Report(report_id);
         env.storage().persistent().set(&_ttl_key, &report);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
-        env.storage().instance().set(&DataKey::ReportCounter, &report_id);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::ReportCounter, &report_id);
 
         env.events().publish(
             (symbol_short!("anomaly"), symbol_short!("detected")),
@@ -175,7 +208,9 @@ impl AnomalyDetectorContract {
     }
 
     pub fn resolve_anomaly(env: Env, admin: Address, report_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -192,27 +227,47 @@ impl AnomalyDetectorContract {
         report.resolved_at = Some(env.ledger().timestamp());
         let _ttl_key = DataKey::Report(report_id);
         env.storage().persistent().set(&_ttl_key, &report);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn get_report(env: Env, report_id: u64) -> Option<AnomalyReport> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage().persistent().get(&DataKey::Report(report_id))
     }
 
     pub fn get_baseline(env: Env, campaign_id: u64) -> Option<TrafficBaseline> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::Baseline(campaign_id))
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::Baseline(campaign_id))
     }
 
     pub fn is_publisher_flagged(env: Env, publisher: Address) -> bool {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::FlaggedPublisher(publisher)).unwrap_or(false)
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::FlaggedPublisher(publisher))
+            .unwrap_or(false)
     }
 
     pub fn get_report_count(env: Env) -> u64 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().instance().get(&DataKey::ReportCounter).unwrap_or(0)
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .get(&DataKey::ReportCounter)
+            .unwrap_or(0)
     }
 }
 

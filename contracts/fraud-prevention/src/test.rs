@@ -1,13 +1,10 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    Address, BytesN, Env,
-};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-fn setup(env: &Env) -> (FraudPreventionContractClient, Address) {
+fn setup(env: &Env) -> (FraudPreventionContractClient<'_>, Address) {
     let admin = Address::generate(env);
 
     let contract_id = env.register_contract(None, FraudPreventionContract);
@@ -51,7 +48,7 @@ fn test_initialize_twice() {
 #[should_panic]
 fn test_initialize_non_admin_fails() {
     let env = Env::default();
-    
+
     let contract_id = env.register_contract(None, FraudPreventionContract);
     let client = FraudPreventionContractClient::new(&env, &contract_id);
 
@@ -139,7 +136,7 @@ fn test_set_threshold_too_high() {
 fn test_flag_suspicious() {
     let env = Env::default();
     env.mock_all_auths();
-    let (client, admin) = setup(&env);
+    let (client, _admin) = setup(&env);
 
     let publisher = Address::generate(&env);
 

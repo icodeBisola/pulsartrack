@@ -2,10 +2,7 @@
 //! Automated recurring payment subscriptions for ad campaigns on Stellar.
 
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    token, Address, Env,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, token, Address, Env};
 
 #[contracttype]
 #[derive(Clone, PartialEq)]
@@ -24,7 +21,7 @@ pub struct RecurringPayment {
     pub recipient: Address,
     pub token: Address,
     pub amount: i128,
-    pub interval_secs: u64,   // payment interval
+    pub interval_secs: u64, // payment interval
     pub max_payments: Option<u32>,
     pub total_payments: u32,
     pub status: RecurringStatus,
@@ -51,13 +48,17 @@ pub struct RecurringPaymentContract;
 #[contractimpl]
 impl RecurringPaymentContract {
     pub fn initialize(env: Env, admin: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::PaymentCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::PaymentCounter, &0u64);
     }
 
     pub fn create_recurring(
@@ -69,7 +70,9 @@ impl RecurringPaymentContract {
         interval_secs: u64,
         max_payments: Option<u32>,
     ) -> u64 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         payer.require_auth();
 
         if amount <= 0 {
@@ -79,7 +82,11 @@ impl RecurringPaymentContract {
             panic!("invalid interval");
         }
 
-        let counter: u64 = env.storage().instance().get(&DataKey::PaymentCounter).unwrap_or(0);
+        let counter: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::PaymentCounter)
+            .unwrap_or(0);
         let payment_id = counter + 1;
 
         let now = env.ledger().timestamp();
@@ -100,14 +107,22 @@ impl RecurringPaymentContract {
 
         let _ttl_key = DataKey::Payment(payment_id);
         env.storage().persistent().set(&_ttl_key, &recurring);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
-        env.storage().instance().set(&DataKey::PaymentCounter, &payment_id);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::PaymentCounter, &payment_id);
 
         payment_id
     }
 
     pub fn execute_payment(env: Env, payment_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         let mut recurring: RecurringPayment = env
             .storage()
             .persistent()
@@ -128,7 +143,11 @@ impl RecurringPaymentContract {
                 recurring.status = RecurringStatus::Cancelled;
                 let _ttl_key = DataKey::Payment(payment_id);
                 env.storage().persistent().set(&_ttl_key, &recurring);
-                env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+                env.storage().persistent().extend_ttl(
+                    &_ttl_key,
+                    PERSISTENT_LIFETIME_THRESHOLD,
+                    PERSISTENT_BUMP_AMOUNT,
+                );
                 panic!("max payments reached");
             }
         }
@@ -142,7 +161,11 @@ impl RecurringPaymentContract {
 
         let _ttl_key = DataKey::Payment(payment_id);
         env.storage().persistent().set(&_ttl_key, &recurring);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("recurring"), symbol_short!("paid")),
@@ -151,7 +174,9 @@ impl RecurringPaymentContract {
     }
 
     pub fn pause_payment(env: Env, payer: Address, payment_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         payer.require_auth();
 
         let mut recurring: RecurringPayment = env
@@ -167,11 +192,17 @@ impl RecurringPaymentContract {
         recurring.status = RecurringStatus::Paused;
         let _ttl_key = DataKey::Payment(payment_id);
         env.storage().persistent().set(&_ttl_key, &recurring);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn resume_payment(env: Env, payer: Address, payment_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         payer.require_auth();
 
         let mut recurring: RecurringPayment = env
@@ -188,11 +219,17 @@ impl RecurringPaymentContract {
         recurring.next_payment = env.ledger().timestamp() + recurring.interval_secs;
         let _ttl_key = DataKey::Payment(payment_id);
         env.storage().persistent().set(&_ttl_key, &recurring);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn cancel_payment(env: Env, payer: Address, payment_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         payer.require_auth();
 
         let mut recurring: RecurringPayment = env
@@ -208,12 +245,20 @@ impl RecurringPaymentContract {
         recurring.status = RecurringStatus::Cancelled;
         let _ttl_key = DataKey::Payment(payment_id);
         env.storage().persistent().set(&_ttl_key, &recurring);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn get_payment(env: Env, payment_id: u64) -> Option<RecurringPayment> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::Payment(payment_id))
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::Payment(payment_id))
     }
 }
 

@@ -10,8 +10,7 @@
 
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    token, Address, Env, String,
+    contract, contractimpl, contracttype, symbol_short, token, Address, Env, String, Symbol,
 };
 
 // ============================================================
@@ -48,12 +47,12 @@ pub struct Subscription {
     pub subscriber: Address,
     pub tier: SubscriptionTier,
     pub is_annual: bool,
-    pub amount_paid: i128,      // last payment amount; used for proration
-    pub started_at: u64,        // original subscription start; preserved across upgrades
+    pub amount_paid: i128, // last payment amount; used for proration
+    pub started_at: u64,   // original subscription start; preserved across upgrades
     pub expires_at: u64,
     pub auto_renew: bool,
-    pub campaigns_used: u32,    // preserved across upgrades and renewals
-    pub impressions_used: u64,  // preserved across upgrades and renewals
+    pub campaigns_used: u32,   // preserved across upgrades and renewals
+    pub impressions_used: u64, // preserved across upgrades and renewals
 }
 
 // ============================================================
@@ -100,9 +99,9 @@ const PERSISTENT_BUMP_AMOUNT: u32 = 1_051_200;
 #[inline]
 fn tier_rank(tier: &SubscriptionTier) -> u32 {
     match tier {
-        SubscriptionTier::Starter    => 0,
-        SubscriptionTier::Growth     => 1,
-        SubscriptionTier::Business   => 2,
+        SubscriptionTier::Starter => 0,
+        SubscriptionTier::Growth => 1,
+        SubscriptionTier::Business => 2,
         SubscriptionTier::Enterprise => 3,
     }
 }
@@ -149,9 +148,11 @@ fn prorated_credit(amount_paid: i128, started_at: u64, expires_at: u64, now: u64
 fn save_subscription(env: &Env, sub: &Subscription) {
     let key = DataKey::Subscription(sub.subscriber.clone());
     env.storage().persistent().set(&key, sub);
-    env.storage()
-        .persistent()
-        .extend_ttl(&key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+    env.storage().persistent().extend_ttl(
+        &key,
+        PERSISTENT_LIFETIME_THRESHOLD,
+        PERSISTENT_BUMP_AMOUNT,
+    );
 }
 
 #[inline]
@@ -226,7 +227,9 @@ impl SubscriptionManagerContract {
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::TokenAddress, &token);
-        env.storage().instance().set(&DataKey::TreasuryAddress, &treasury);
+        env.storage()
+            .instance()
+            .set(&DataKey::TreasuryAddress, &treasury);
         Self::_init_plans(&env);
     }
 
@@ -347,7 +350,7 @@ impl SubscriptionManagerContract {
             subscriber: subscriber.clone(),
             tier: new_tier,
             is_annual,
-            amount_paid: new_price,  // store full price for future proration
+            amount_paid: new_price, // store full price for future proration
             started_at: now,
             expires_at: now + period,
             auto_renew,
@@ -376,12 +379,7 @@ impl SubscriptionManagerContract {
     /// - `started_at` is preserved (reflects the original join date).
     ///
     /// Panics if no subscription record exists for the address.
-    pub fn renew(
-        env: Env,
-        subscriber: Address,
-        is_annual: bool,
-        auto_renew: bool,
-    ) {
+    pub fn renew(env: Env, subscriber: Address, is_annual: bool, auto_renew: bool) {
         env.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
@@ -389,8 +387,8 @@ impl SubscriptionManagerContract {
 
         let now = env.ledger().timestamp();
 
-        let mut existing = load_subscription(&env, &subscriber)
-            .unwrap_or_else(|| panic!("no subscription found"));
+        let mut existing =
+            load_subscription(&env, &subscriber).unwrap_or_else(|| panic!("no subscription found"));
 
         let plan = load_plan(&env, existing.tier.clone());
         let amount = plan_price(&plan, is_annual);
@@ -409,6 +407,50 @@ impl SubscriptionManagerContract {
 
         env.events().publish(
             (symbol_short!("sub"), symbol_short!("renew")),
+            (subscriber, amount),
+        );
+    }
+
+    /// Auto-renew an expired subscription (keeper bot pattern).
+    /// Anyone can call this for a subscriber whose subscription has expired and has auto_renew = true.
+    pub fn auto_renew_subscription(env: Env, subscriber: Address) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        let now = env.ledger().timestamp();
+        let mut sub =
+            load_subscription(&env, &subscriber).unwrap_or_else(|| panic!("no subscription found"));
+
+        if !sub.auto_renew {
+            panic!("auto renew not enabled");
+        }
+        if sub.expires_at > now {
+            panic!("subscription not yet expired");
+        }
+
+        let plan = load_plan(&env, sub.tier.clone());
+        let amount = plan_price(&plan, sub.is_annual);
+        let period = plan_period_secs(sub.is_annual);
+
+        // Check if subscriber has sufficient balance
+        let (token_addr, _) = load_token_and_treasury(&env);
+        let token_client = token::Client::new(&env, &token_addr);
+        if token_client.balance(&subscriber) < amount {
+            panic!("insufficient balance for auto-renewal");
+        }
+
+        // Transfer funds (requires subscriber to have authorized the contract, e.g., via allowance)
+        charge(&env, &subscriber, amount);
+
+        let base = sub.expires_at.max(now);
+        sub.expires_at = base + period;
+        sub.amount_paid = amount;
+
+        save_subscription(&env, &sub);
+
+        env.events().publish(
+            (symbol_short!("sub"), Symbol::new(&env, "auto_renew")),
             (subscriber, amount),
         );
     }
@@ -499,14 +541,75 @@ impl SubscriptionManagerContract {
     fn _init_plans(env: &Env) {
         // (tier, name, monthly_stroops, annual_stroops, max_campaigns,
         //  max_impressions/month, max_publishers, analytics, api_access)
-        let plans: [(SubscriptionTier, &str, i128, i128, u32, u64, u32, bool, bool); 4] = [
-            (SubscriptionTier::Starter,    "Starter",    99_000_000,         990_000_000,       5,    100_000,    10,  false, false),
-            (SubscriptionTier::Growth,     "Growth",     299_000_000,       2_990_000_000,      25,   500_000,    50,  true,  false),
-            (SubscriptionTier::Business,   "Business",   799_000_000,       7_990_000_000,     100, 2_000_000,   200,  true,  true),
-            (SubscriptionTier::Enterprise, "Enterprise", 1_999_000_000,    19_990_000_000,    1000, 10_000_000, 1000,  true,  true),
+        let plans: [(
+            SubscriptionTier,
+            &str,
+            i128,
+            i128,
+            u32,
+            u64,
+            u32,
+            bool,
+            bool,
+        ); 4] = [
+            (
+                SubscriptionTier::Starter,
+                "Starter",
+                99_000_000,
+                990_000_000,
+                5,
+                100_000,
+                10,
+                false,
+                false,
+            ),
+            (
+                SubscriptionTier::Growth,
+                "Growth",
+                299_000_000,
+                2_990_000_000,
+                25,
+                500_000,
+                50,
+                true,
+                false,
+            ),
+            (
+                SubscriptionTier::Business,
+                "Business",
+                799_000_000,
+                7_990_000_000,
+                100,
+                2_000_000,
+                200,
+                true,
+                true,
+            ),
+            (
+                SubscriptionTier::Enterprise,
+                "Enterprise",
+                1_999_000_000,
+                19_990_000_000,
+                1000,
+                10_000_000,
+                1000,
+                true,
+                true,
+            ),
         ];
 
-        for (tier, name, monthly, annual, max_campaigns, max_impressions, max_pubs, analytics, api) in plans {
+        for (
+            tier,
+            name,
+            monthly,
+            annual,
+            max_campaigns,
+            max_impressions,
+            max_pubs,
+            analytics,
+            api,
+        ) in plans
+        {
             let plan = SubscriptionPlan {
                 tier: tier.clone(),
                 name: String::from_str(env, name),
@@ -520,9 +623,11 @@ impl SubscriptionManagerContract {
             };
             let key = DataKey::Plan(tier);
             env.storage().persistent().set(&key, &plan);
-            env.storage()
-                .persistent()
-                .extend_ttl(&key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+            env.storage().persistent().extend_ttl(
+                &key,
+                PERSISTENT_LIFETIME_THRESHOLD,
+                PERSISTENT_BUMP_AMOUNT,
+            );
         }
     }
 }

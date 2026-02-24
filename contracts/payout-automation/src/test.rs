@@ -9,7 +9,8 @@ use soroban_sdk::{
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 fn deploy_token(env: &Env, admin: &Address) -> Address {
-    env.register_stellar_asset_contract_v2(admin.clone()).address()
+    env.register_stellar_asset_contract_v2(admin.clone())
+        .address()
 }
 
 fn mint(env: &Env, token_addr: &Address, to: &Address, amount: i128) {
@@ -17,7 +18,14 @@ fn mint(env: &Env, token_addr: &Address, to: &Address, amount: i128) {
     sac.mint(to, &amount);
 }
 
-fn setup(env: &Env) -> (PayoutAutomationContractClient, Address, Address, Address) {
+fn setup(
+    env: &Env,
+) -> (
+    PayoutAutomationContractClient<'_>,
+    Address,
+    Address,
+    Address,
+) {
     let admin = Address::generate(env);
     let token_admin = Address::generate(env);
     let token_addr = deploy_token(env, &token_admin);
@@ -82,7 +90,7 @@ fn test_schedule_payout() {
         &admin,
         &recipient,
         &1_000_000i128,
-        &3600u64,          // execute_after = 1 hour from epoch 0
+        &3600u64, // execute_after = 1 hour from epoch 0
         &Some(99u64),
     );
 
@@ -144,9 +152,7 @@ fn test_execute_payout() {
     mint(&env, &token_addr, &contract_id, 10_000_000);
 
     let recipient = Address::generate(&env);
-    let payout_id = client.schedule_payout(
-        &admin, &recipient, &1_000_000i128, &100u64, &None,
-    );
+    let payout_id = client.schedule_payout(&admin, &recipient, &1_000_000i128, &100u64, &None);
 
     // advance past execute_after
     env.ledger().with_mut(|li| {
@@ -182,7 +188,11 @@ fn test_execute_payout_too_early() {
 
     let recipient = Address::generate(&env);
     let payout_id = client.schedule_payout(
-        &admin, &recipient, &1_000_000i128, &9999u64, &None, // far future
+        &admin,
+        &recipient,
+        &1_000_000i128,
+        &9999u64,
+        &None, // far future
     );
 
     // ledger timestamp is still 0 → too early
@@ -206,9 +216,7 @@ fn test_execute_payout_twice() {
     mint(&env, &token_addr, &contract_id, 10_000_000);
 
     let recipient = Address::generate(&env);
-    let payout_id = client.schedule_payout(
-        &admin, &recipient, &1_000_000i128, &0u64, &None,
-    );
+    let payout_id = client.schedule_payout(&admin, &recipient, &1_000_000i128, &0u64, &None);
 
     client.execute_payout(&payout_id);
     client.execute_payout(&payout_id); // second attempt → "payout not scheduled"
@@ -275,9 +283,7 @@ fn test_publisher_earnings_updated_after_payout() {
     // register 1_500_000 pending earnings
     client.add_publisher_earnings(&admin, &publisher, &1_500_000i128);
 
-    let payout_id = client.schedule_payout(
-        &admin, &publisher, &1_000_000i128, &0u64, &None,
-    );
+    let payout_id = client.schedule_payout(&admin, &publisher, &1_000_000i128, &0u64, &None);
 
     // advance timestamp so last_payout is recorded as non-zero
     env.ledger().with_mut(|li| {

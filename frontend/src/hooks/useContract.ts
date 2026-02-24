@@ -64,6 +64,65 @@ export function usePublisherReputation(publisherAddress: string, enabled = true)
 }
 
 /**
+ * Hook to get advertiser stats
+ */
+export function useAdvertiserStats(advertiserAddress: string, enabled = true) {
+  return useContractRead(
+    {
+      contractId: CONTRACT_IDS.CAMPAIGN_ORCHESTRATOR,
+      method: 'get_advertiser_stats',
+      args: advertiserAddress ? [addressToScVal(advertiserAddress)] : [],
+    },
+    enabled && !!advertiserAddress
+  );
+}
+
+/**
+ * Hook to get campaign count
+ */
+export function useCampaignCount(enabled = true) {
+  return useContractRead<number>(
+    {
+      contractId: CONTRACT_IDS.CAMPAIGN_ORCHESTRATOR,
+      method: 'get_campaign_count',
+      args: [],
+    },
+    enabled
+  );
+}
+
+/**
+ * Hook to get all campaigns for an advertiser
+ */
+export function useAdvertiserCampaigns(advertiserAddress: string, campaignCount: number | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['advertiser_campaigns', advertiserAddress, campaignCount],
+    queryFn: async () => {
+      if (!campaignCount) return [];
+      const campaigns: any[] = [];
+      // Fetch concurrently for better performance
+      const promises = [];
+      for (let i = 1; i <= campaignCount; i++) {
+        promises.push(
+          callReadOnly({
+            contractId: CONTRACT_IDS.CAMPAIGN_ORCHESTRATOR,
+            method: 'get_campaign',
+            args: [u64ToScVal(i)],
+          }).then(campaign => {
+            if (campaign && campaign.advertiser === advertiserAddress) {
+              campaigns.push({ id: i, ...campaign });
+            }
+          }).catch(() => null) // Ignore missing or failed campaigns
+        );
+      }
+      await Promise.all(promises);
+      return campaigns.sort((a, b) => Number(b.id) - Number(a.id));
+    },
+    enabled: enabled && !!advertiserAddress && (campaignCount ?? 0) > 0,
+  });
+}
+
+/**
  * Hook to get subscription status
  */
 export function useSubscription(subscriberAddress: string, enabled = true) {

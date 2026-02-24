@@ -1,8 +1,8 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, Env};
 
-fn setup(env: &Env) -> (GovernanceTokenContractClient, Address) {
+fn setup(env: &Env) -> (GovernanceTokenContractClient<'_>, Address) {
     let admin = Address::generate(env);
     let id = env.register_contract(None, GovernanceTokenContract);
     let c = GovernanceTokenContractClient::new(env, &id);
@@ -12,7 +12,8 @@ fn setup(env: &Env) -> (GovernanceTokenContractClient, Address) {
 
 #[test]
 fn test_initialize() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
     assert_eq!(c.total_supply(), 0);
     assert_eq!(c.decimals(), 7);
@@ -21,10 +22,13 @@ fn test_initialize() {
 #[test]
 #[should_panic(expected = "already initialized")]
 fn test_initialize_twice() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let id = env.register_contract(None, GovernanceTokenContract);
     let c = GovernanceTokenContractClient::new(&env, &id);
-    let a = Address::generate(&env); c.initialize(&a); c.initialize(&a);
+    let a = Address::generate(&env);
+    c.initialize(&a);
+    c.initialize(&a);
 }
 
 #[test]
@@ -38,7 +42,8 @@ fn test_initialize_non_admin_fails() {
 
 #[test]
 fn test_mint() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let user = Address::generate(&env);
     c.mint(&admin, &user, &1_000_000i128);
@@ -49,14 +54,20 @@ fn test_mint() {
 #[test]
 #[should_panic(expected = "unauthorized")]
 fn test_mint_unauthorized() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
-    c.mint(&Address::generate(&env), &Address::generate(&env), &1_000i128);
+    c.mint(
+        &Address::generate(&env),
+        &Address::generate(&env),
+        &1_000i128,
+    );
 }
 
 #[test]
 fn test_transfer() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let from = Address::generate(&env);
     let to = Address::generate(&env);
@@ -68,7 +79,8 @@ fn test_transfer() {
 
 #[test]
 fn test_burn() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let user = Address::generate(&env);
     c.mint(&admin, &user, &1_000i128);
@@ -79,7 +91,8 @@ fn test_burn() {
 
 #[test]
 fn test_delegate() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let delegator = Address::generate(&env);
     let delegate = Address::generate(&env);
@@ -93,7 +106,8 @@ fn test_delegate() {
 
 #[test]
 fn test_revoke_delegation() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let delegator = Address::generate(&env);
     let delegate = Address::generate(&env);
@@ -105,7 +119,8 @@ fn test_revoke_delegation() {
 
 #[test]
 fn test_voting_power_self() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let user = Address::generate(&env);
     c.mint(&admin, &user, &1_000i128);
@@ -114,7 +129,8 @@ fn test_voting_power_self() {
 
 #[test]
 fn test_approve_and_allowance() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let owner = Address::generate(&env);
     let spender = Address::generate(&env);
@@ -125,7 +141,8 @@ fn test_approve_and_allowance() {
 
 #[test]
 fn test_balance_zero() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
     assert_eq!(c.balance(&Address::generate(&env)), 0);
 }

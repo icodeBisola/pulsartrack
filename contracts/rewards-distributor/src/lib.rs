@@ -2,10 +2,7 @@
 //! Distributes PULSAR governance token rewards to ecosystem participants on Stellar.
 
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    token, Address, Env,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, token, Address, Env};
 
 #[contracttype]
 #[derive(Clone)]
@@ -52,14 +49,20 @@ pub struct RewardsDistributorContract;
 #[contractimpl]
 impl RewardsDistributorContract {
     pub fn initialize(env: Env, admin: Address, reward_token: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::RewardToken, &reward_token);
-        env.storage().instance().set(&DataKey::ProgramCounter, &0u32);
+        env.storage()
+            .instance()
+            .set(&DataKey::RewardToken, &reward_token);
+        env.storage()
+            .instance()
+            .set(&DataKey::ProgramCounter, &0u32);
     }
 
     pub fn create_program(
@@ -70,14 +73,20 @@ impl RewardsDistributorContract {
         reward_per_unit: i128,
         duration_ledgers: u32,
     ) -> u32 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
             panic!("unauthorized");
         }
 
-        let counter: u32 = env.storage().instance().get(&DataKey::ProgramCounter).unwrap_or(0);
+        let counter: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProgramCounter)
+            .unwrap_or(0);
         let program_id = counter + 1;
 
         let start = env.ledger().sequence();
@@ -94,14 +103,28 @@ impl RewardsDistributorContract {
 
         let _ttl_key = DataKey::Program(program_id);
         env.storage().persistent().set(&_ttl_key, &program);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
-        env.storage().instance().set(&DataKey::ProgramCounter, &program_id);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::ProgramCounter, &program_id);
 
         program_id
     }
 
-    pub fn distribute_rewards(env: Env, admin: Address, recipient: Address, amount: i128, program_id: u32) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    pub fn distribute_rewards(
+        env: Env,
+        admin: Address,
+        recipient: Address,
+        amount: i128,
+        program_id: u32,
+    ) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -129,15 +152,16 @@ impl RewardsDistributorContract {
         program.distributed += amount;
         let _ttl_key = DataKey::Program(program_id);
         env.storage().persistent().set(&_ttl_key, &program);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         // Update user rewards
         let key = DataKey::UserRewards(recipient.clone());
-        let mut rewards: UserRewards = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(UserRewards {
+        let mut rewards: UserRewards =
+            env.storage().persistent().get(&key).unwrap_or(UserRewards {
                 user: recipient.clone(),
                 total_earned: 0,
                 total_claimed: 0,
@@ -149,7 +173,11 @@ impl RewardsDistributorContract {
         rewards.pending += amount;
         rewards.last_earned = env.ledger().timestamp();
         env.storage().persistent().set(&key, &rewards);
-        env.storage().persistent().extend_ttl(&key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("rewards"), symbol_short!("earned")),
@@ -158,15 +186,13 @@ impl RewardsDistributorContract {
     }
 
     pub fn claim_rewards(env: Env, user: Address) -> i128 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         user.require_auth();
 
         let key = DataKey::UserRewards(user.clone());
-        let mut rewards: UserRewards = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .expect("no rewards");
+        let mut rewards: UserRewards = env.storage().persistent().get(&key).expect("no rewards");
 
         let pending = rewards.pending;
         if pending <= 0 {
@@ -180,7 +206,11 @@ impl RewardsDistributorContract {
         rewards.total_claimed += pending;
         rewards.pending = 0;
         env.storage().persistent().set(&key, &rewards);
-        env.storage().persistent().extend_ttl(&key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("rewards"), symbol_short!("claimed")),
@@ -191,12 +221,18 @@ impl RewardsDistributorContract {
     }
 
     pub fn get_program(env: Env, program_id: u32) -> Option<RewardProgram> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::Program(program_id))
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::Program(program_id))
     }
 
     pub fn get_user_rewards(env: Env, user: Address) -> Option<UserRewards> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage().persistent().get(&DataKey::UserRewards(user))
     }
 }

@@ -2,14 +2,16 @@
 use super::*;
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
-fn setup(env: &Env) -> (TargetingEngineContractClient, Address) {
+fn setup(env: &Env) -> (TargetingEngineContractClient<'_>, Address) {
     let admin = Address::generate(env);
     let id = env.register_contract(None, TargetingEngineContract);
     let c = TargetingEngineContractClient::new(env, &id);
     c.initialize(&admin);
     (c, admin)
 }
-fn s(env: &Env, v: &str) -> String { String::from_str(env, v) }
+fn s(env: &Env, v: &str) -> String {
+    String::from_str(env, v)
+}
 
 fn default_params(env: &Env) -> TargetingParams {
     TargetingParams {
@@ -28,15 +30,22 @@ fn default_params(env: &Env) -> TargetingParams {
 }
 
 #[test]
-fn test_initialize() { let env = Env::default(); env.mock_all_auths(); setup(&env); }
+fn test_initialize() {
+    let env = Env::default();
+    env.mock_all_auths();
+    setup(&env);
+}
 
 #[test]
 #[should_panic(expected = "already initialized")]
 fn test_initialize_twice() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let id = env.register_contract(None, TargetingEngineContract);
     let c = TargetingEngineContractClient::new(&env, &id);
-    let a = Address::generate(&env); c.initialize(&a); c.initialize(&a);
+    let a = Address::generate(&env);
+    c.initialize(&a);
+    c.initialize(&a);
 }
 
 #[test]
@@ -50,14 +59,16 @@ fn test_initialize_non_admin_fails() {
 
 #[test]
 fn test_add_oracle() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     c.add_oracle(&admin, &Address::generate(&env));
 }
 
 #[test]
 fn test_set_targeting() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
     let advertiser = Address::generate(&env);
     let params = default_params(&env);
@@ -68,21 +79,29 @@ fn test_set_targeting() {
 
 #[test]
 fn test_compute_score() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let oracle = Address::generate(&env);
     let pub1 = Address::generate(&env);
     let advertiser = Address::generate(&env);
     c.add_oracle(&admin, &oracle);
     c.set_targeting(&advertiser, &1u64, &default_params(&env));
-    c.compute_score(&oracle, &1u64, &pub1, &750u32, &s(&env, "geo_match,interest_match"));
+    c.compute_score(
+        &oracle,
+        &1u64,
+        &pub1,
+        &750u32,
+        &s(&env, "geo_match,interest_match"),
+    );
     let score = c.get_targeting_score(&1u64, &pub1).unwrap();
     assert_eq!(score.score, 750);
 }
 
 #[test]
 fn test_is_publisher_targeted() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let oracle = Address::generate(&env);
     let pub1 = Address::generate(&env);
@@ -96,7 +115,8 @@ fn test_is_publisher_targeted() {
 
 #[test]
 fn test_get_targeting_nonexistent() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
     assert!(c.get_targeting(&999u64).is_none());
 }

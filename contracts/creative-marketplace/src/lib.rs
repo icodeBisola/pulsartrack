@@ -3,8 +3,7 @@
 
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    token, Address, Env, String,
+    contract, contractimpl, contracttype, symbol_short, token, Address, Env, String,
 };
 
 #[contracttype]
@@ -30,7 +29,7 @@ pub enum LicenseType {
 pub struct CreativeListing {
     pub listing_id: u64,
     pub creator: Address,
-    pub content_hash: String,  // IPFS hash
+    pub content_hash: String, // IPFS hash
     pub title: String,
     pub description: String,
     pub price: i128,
@@ -59,7 +58,7 @@ pub enum DataKey {
     ListingCounter,
     PlatformFeeBps,
     Listing(u64),
-    License(u64, Address),   // listing_id, licensee
+    License(u64, Address), // listing_id, licensee
 }
 
 const INSTANCE_LIFETIME_THRESHOLD: u32 = 17_280;
@@ -73,15 +72,21 @@ pub struct CreativeMarketplaceContract;
 #[contractimpl]
 impl CreativeMarketplaceContract {
     pub fn initialize(env: Env, admin: Address, token: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::TokenAddress, &token);
-        env.storage().instance().set(&DataKey::ListingCounter, &0u64);
-        env.storage().instance().set(&DataKey::PlatformFeeBps, &250u32); // 2.5%
+        env.storage()
+            .instance()
+            .set(&DataKey::ListingCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::PlatformFeeBps, &250u32); // 2.5%
     }
 
     pub fn create_listing(
@@ -93,14 +98,20 @@ impl CreativeMarketplaceContract {
         price: i128,
         license_type: LicenseType,
     ) -> u64 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         creator.require_auth();
 
         if price <= 0 {
             panic!("invalid price");
         }
 
-        let counter: u64 = env.storage().instance().get(&DataKey::ListingCounter).unwrap_or(0);
+        let counter: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ListingCounter)
+            .unwrap_or(0);
         let listing_id = counter + 1;
 
         let listing = CreativeListing {
@@ -119,8 +130,14 @@ impl CreativeMarketplaceContract {
 
         let _ttl_key = DataKey::Listing(listing_id);
         env.storage().persistent().set(&_ttl_key, &listing);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
-        env.storage().instance().set(&DataKey::ListingCounter, &listing_id);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::ListingCounter, &listing_id);
 
         env.events().publish(
             (symbol_short!("listing"), symbol_short!("created")),
@@ -136,7 +153,9 @@ impl CreativeMarketplaceContract {
         listing_id: u64,
         license_duration_secs: Option<u64>,
     ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         buyer.require_auth();
 
         let mut listing: CreativeListing = env
@@ -150,17 +169,29 @@ impl CreativeMarketplaceContract {
         }
 
         // Check not already licensed
-        if env.storage().persistent().has(&DataKey::License(listing_id, buyer.clone())) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::License(listing_id, buyer.clone()))
+        {
             panic!("already licensed");
         }
 
         // Calculate fee
-        let fee_bps: u32 = env.storage().instance().get(&DataKey::PlatformFeeBps).unwrap_or(250);
+        let fee_bps: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::PlatformFeeBps)
+            .unwrap_or(250);
         let fee = (listing.price * fee_bps as i128) / 10_000;
         let creator_amount = listing.price - fee;
 
         // Process payment
-        let token_addr: Address = env.storage().instance().get(&DataKey::TokenAddress).unwrap();
+        let token_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenAddress)
+            .unwrap();
         let token_client = token::Client::new(&env, &token_addr);
         token_client.transfer(&buyer, &listing.creator, &creator_amount);
 
@@ -184,7 +215,11 @@ impl CreativeMarketplaceContract {
 
         let _ttl_key = DataKey::License(listing_id, buyer);
         env.storage().persistent().set(&_ttl_key, &license);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         listing.sale_count += 1;
         listing.last_updated = now;
@@ -196,7 +231,11 @@ impl CreativeMarketplaceContract {
 
         let _ttl_key = DataKey::Listing(listing_id);
         env.storage().persistent().set(&_ttl_key, &listing);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("license"), symbol_short!("purchased")),
@@ -205,7 +244,9 @@ impl CreativeMarketplaceContract {
     }
 
     pub fn remove_listing(env: Env, creator: Address, listing_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         creator.require_auth();
 
         let mut listing: CreativeListing = env
@@ -222,22 +263,40 @@ impl CreativeMarketplaceContract {
         listing.last_updated = env.ledger().timestamp();
         let _ttl_key = DataKey::Listing(listing_id);
         env.storage().persistent().set(&_ttl_key, &listing);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn get_listing(env: Env, listing_id: u64) -> Option<CreativeListing> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::Listing(listing_id))
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::Listing(listing_id))
     }
 
     pub fn get_license(env: Env, listing_id: u64, licensee: Address) -> Option<License> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::License(listing_id, licensee))
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::License(listing_id, licensee))
     }
 
     pub fn has_license(env: Env, listing_id: u64, licensee: Address) -> bool {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        if let Some(license) = env.storage().persistent().get::<DataKey, License>(&DataKey::License(listing_id, licensee)) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        if let Some(license) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, License>(&DataKey::License(listing_id, licensee))
+        {
             if let Some(expires) = license.expires_at {
                 expires > env.ledger().timestamp()
             } else {

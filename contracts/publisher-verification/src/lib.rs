@@ -1,12 +1,8 @@
 //! PulsarTrack - Publisher Verification (Soroban)
 //! Publisher registration, KYC, and verification on Stellar.
 
-
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    Address, Env, String,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String};
 
 // ============================================================
 // Data Types
@@ -86,7 +82,9 @@ pub struct PublisherVerificationContract;
 impl PublisherVerificationContract {
     /// Initialize the contract
     pub fn initialize(env: Env, admin: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
@@ -99,7 +97,9 @@ impl PublisherVerificationContract {
 
     /// Register as a publisher (self-registration)
     pub fn register_publisher(env: Env, publisher: Address, domain: String) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         publisher.require_auth();
 
         if env
@@ -133,19 +133,19 @@ impl PublisherVerificationContract {
         };
 
         let _ttl_key = DataKey::Publisher(publisher.clone());
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &pub_data);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &pub_data);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
         let _ttl_key = DataKey::DomainOwner(domain);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &publisher);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &publisher);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         let count: u64 = env
             .storage()
@@ -163,13 +163,10 @@ impl PublisherVerificationContract {
     }
 
     /// Submit KYC documents (publisher)
-    pub fn submit_kyc(
-        env: Env,
-        publisher: Address,
-        kyc_hash: String,
-        kyc_provider: String,
-    ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    pub fn submit_kyc(env: Env, publisher: Address, kyc_hash: String, kyc_provider: String) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         publisher.require_auth();
 
         if !env
@@ -190,12 +187,12 @@ impl PublisherVerificationContract {
         };
 
         let _ttl_key = DataKey::KycRecord(publisher.clone());
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &kyc);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &kyc);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("kyc"), symbol_short!("submitted")),
@@ -210,7 +207,9 @@ impl PublisherVerificationContract {
         publisher: Address,
         initial_tier: PublisherTier,
     ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -229,12 +228,12 @@ impl PublisherVerificationContract {
         pub_data.reputation_score = 100;
 
         let _ttl_key = DataKey::Publisher(publisher.clone());
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &pub_data);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &pub_data);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         // Mark KYC as verified
         if let Some(mut kyc) = env
@@ -245,12 +244,12 @@ impl PublisherVerificationContract {
             kyc.verified = true;
             kyc.verified_at = Some(env.ledger().timestamp());
             let _ttl_key = DataKey::KycRecord(publisher.clone());
-            env.storage()
-                .persistent()
-                .set(&_ttl_key, &kyc);
-            env.storage()
-                .persistent()
-                .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+            env.storage().persistent().set(&_ttl_key, &kyc);
+            env.storage().persistent().extend_ttl(
+                &_ttl_key,
+                PERSISTENT_LIFETIME_THRESHOLD,
+                PERSISTENT_BUMP_AMOUNT,
+            );
         }
 
         env.events().publish(
@@ -261,7 +260,9 @@ impl PublisherVerificationContract {
 
     /// Suspend a publisher (admin only)
     pub fn suspend_publisher(env: Env, admin: Address, publisher: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -277,17 +278,19 @@ impl PublisherVerificationContract {
         pub_data.status = VerificationStatus::Suspended;
 
         let _ttl_key = DataKey::Publisher(publisher);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &pub_data);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &pub_data);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     /// Update publisher reputation score (admin only)
     pub fn update_reputation(env: Env, admin: Address, publisher: Address, score: u32) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -308,17 +311,19 @@ impl PublisherVerificationContract {
         pub_data.tier = Self::_score_to_tier(score);
 
         let _ttl_key = DataKey::Publisher(publisher);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &pub_data);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &pub_data);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     /// Record impression (called by campaign orchestrator)
-    pub fn record_impression(env: Env, caller: Address, publisher: Address, earning: i128) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    pub fn record_impression(env: Env, _caller: Address, publisher: Address, earning: i128) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         // In production, restrict to campaign orchestrator contract only
         let mut pub_data: Publisher = env
             .storage()
@@ -336,12 +341,12 @@ impl PublisherVerificationContract {
         pub_data.last_active = env.ledger().timestamp();
 
         let _ttl_key = DataKey::Publisher(publisher);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &pub_data);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &pub_data);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     // ============================================================
@@ -349,21 +354,27 @@ impl PublisherVerificationContract {
     // ============================================================
 
     pub fn get_publisher(env: Env, publisher: Address) -> Option<Publisher> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .persistent()
             .get(&DataKey::Publisher(publisher))
     }
 
     pub fn get_kyc(env: Env, publisher: Address) -> Option<KycRecord> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .persistent()
             .get(&DataKey::KycRecord(publisher))
     }
 
     pub fn is_verified(env: Env, publisher: Address) -> bool {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if let Some(pub_data) = env
             .storage()
             .persistent()
@@ -376,14 +387,18 @@ impl PublisherVerificationContract {
     }
 
     pub fn get_domain_owner(env: Env, domain: String) -> Option<Address> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .persistent()
             .get(&DataKey::DomainOwner(domain))
     }
 
     pub fn get_publisher_count(env: Env) -> u64 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .instance()
             .get(&DataKey::PublisherCount)

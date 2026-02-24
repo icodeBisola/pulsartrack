@@ -8,8 +8,7 @@
 
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    token, Address, Env, String,
+    contract, contractimpl, contracttype, symbol_short, token, Address, Env, String,
 };
 
 #[contracttype]
@@ -53,9 +52,9 @@ pub enum DataKey {
     AuctionCounter,
     Auction(u64),
     BidCount(u64),
-    Bid(u64, u32),       // auction_id, bid_index
+    Bid(u64, u32), // auction_id, bid_index
     HighestBid(u64),
-    BidderBid(u64, Address),  // auction_id, bidder
+    BidderBid(u64, Address), // auction_id, bidder
 }
 
 const INSTANCE_LIFETIME_THRESHOLD: u32 = 17_280;
@@ -69,14 +68,18 @@ pub struct AuctionEngineContract;
 #[contractimpl]
 impl AuctionEngineContract {
     pub fn initialize(env: Env, admin: Address, token: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::TokenAddress, &token);
-        env.storage().instance().set(&DataKey::AuctionCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::AuctionCounter, &0u64);
     }
 
     pub fn create_auction(
@@ -87,10 +90,16 @@ impl AuctionEngineContract {
         reserve_price: i128,
         duration_secs: u64,
     ) -> u64 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         publisher.require_auth();
 
-        let counter: u64 = env.storage().instance().get(&DataKey::AuctionCounter).unwrap_or(0);
+        let counter: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AuctionCounter)
+            .unwrap_or(0);
         let auction_id = counter + 1;
 
         let now = env.ledger().timestamp();
@@ -110,8 +119,14 @@ impl AuctionEngineContract {
 
         let _ttl_key = DataKey::Auction(auction_id);
         env.storage().persistent().set(&_ttl_key, &auction);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
-        env.storage().instance().set(&DataKey::AuctionCounter, &auction_id);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::AuctionCounter, &auction_id);
 
         env.events().publish(
             (symbol_short!("auction"), symbol_short!("created")),
@@ -122,7 +137,9 @@ impl AuctionEngineContract {
     }
 
     pub fn place_bid(env: Env, bidder: Address, auction_id: u64, amount: i128, campaign_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         bidder.require_auth();
 
         let mut auction: Auction = env
@@ -145,7 +162,10 @@ impl AuctionEngineContract {
         }
 
         // Check if higher than current best
-        let current_high: Option<i128> = env.storage().persistent().get(&DataKey::HighestBid(auction_id));
+        let current_high: Option<i128> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::HighestBid(auction_id));
         if let Some(high) = current_high {
             if amount <= high {
                 panic!("bid too low");
@@ -159,26 +179,50 @@ impl AuctionEngineContract {
             timestamp: now,
         };
 
-        let bid_count: u32 = env.storage().persistent().get(&DataKey::BidCount(auction_id)).unwrap_or(0);
+        let bid_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::BidCount(auction_id))
+            .unwrap_or(0);
         let _ttl_key = DataKey::Bid(auction_id, bid_count);
         env.storage().persistent().set(&_ttl_key, &bid);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
         let _ttl_key = DataKey::BidCount(auction_id);
         env.storage().persistent().set(&_ttl_key, &(bid_count + 1));
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
         let _ttl_key = DataKey::BidderBid(auction_id, bidder.clone());
         env.storage().persistent().set(&_ttl_key, &amount);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
         let _ttl_key = DataKey::HighestBid(auction_id);
         env.storage().persistent().set(&_ttl_key, &amount);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         auction.bid_count += 1;
         auction.winning_bid = Some(amount);
         auction.winner = Some(bidder.clone());
         let _ttl_key = DataKey::Auction(auction_id);
         env.storage().persistent().set(&_ttl_key, &auction);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("bid"), symbol_short!("placed")),
@@ -187,7 +231,9 @@ impl AuctionEngineContract {
     }
 
     pub fn settle_auction(env: Env, caller: Address, auction_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         let mut auction: Auction = env
             .storage()
             .persistent()
@@ -208,7 +254,11 @@ impl AuctionEngineContract {
             let winning = auction.winning_bid.unwrap();
             if winning >= auction.reserve_price {
                 // Transfer payment from winner to publisher
-                let token_addr: Address = env.storage().instance().get(&DataKey::TokenAddress).unwrap();
+                let token_addr: Address = env
+                    .storage()
+                    .instance()
+                    .get(&DataKey::TokenAddress)
+                    .unwrap();
                 let token_client = token::Client::new(&env, &token_addr);
                 if let Some(winner) = auction.winner.clone() {
                     token_client.transfer(&winner, &auction.publisher, &winning);
@@ -223,7 +273,11 @@ impl AuctionEngineContract {
 
         let _ttl_key = DataKey::Auction(auction_id);
         env.storage().persistent().set(&_ttl_key, &auction);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("auction"), symbol_short!("settle")),
@@ -232,23 +286,40 @@ impl AuctionEngineContract {
     }
 
     pub fn get_auction(env: Env, auction_id: u64) -> Option<Auction> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::Auction(auction_id))
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::Auction(auction_id))
     }
 
     pub fn get_bid(env: Env, auction_id: u64, index: u32) -> Option<Bid> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::Bid(auction_id, index))
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::Bid(auction_id, index))
     }
 
     pub fn get_bid_count(env: Env, auction_id: u64) -> u32 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::BidCount(auction_id)).unwrap_or(0)
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::BidCount(auction_id))
+            .unwrap_or(0)
     }
 
     pub fn get_highest_bid(env: Env, auction_id: u64) -> Option<i128> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::HighestBid(auction_id))
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::HighestBid(auction_id))
     }
 }
 

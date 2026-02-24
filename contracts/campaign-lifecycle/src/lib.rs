@@ -7,10 +7,7 @@
 //! - ("campaign", "resume"): [campaign_id: u64, actor: Address]
 
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    Address, Env, String,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String};
 
 #[contracttype]
 #[derive(Clone, PartialEq)]
@@ -79,30 +76,44 @@ pub struct CampaignLifecycleContract;
 #[contractimpl]
 impl CampaignLifecycleContract {
     pub fn initialize(env: Env, admin: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::LifecycleCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::LifecycleCounter, &0u64);
     }
 
     pub fn set_fraud_contract(env: Env, admin: Address, fraud_contract: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
             panic!("unauthorized");
         }
-        env.storage().instance().set(&DataKey::FraudContract, &fraud_contract);
+        env.storage()
+            .instance()
+            .set(&DataKey::FraudContract, &fraud_contract);
     }
 
     pub fn pause_for_fraud(env: Env, fraud_contract: Address, campaign_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         fraud_contract.require_auth();
-        
-        let stored_fraud_contract: Address = env.storage().instance().get(&DataKey::FraudContract).expect("fraud contract not set");
+
+        let stored_fraud_contract: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::FraudContract)
+            .expect("fraud contract not set");
         if fraud_contract != stored_fraud_contract {
             panic!("unauthorized fraud contract");
         }
@@ -116,13 +127,10 @@ impl CampaignLifecycleContract {
         );
     }
 
-    pub fn register_campaign(
-        env: Env,
-        advertiser: Address,
-        campaign_id: u64,
-        end_ledger: u32,
-    ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    pub fn register_campaign(env: Env, advertiser: Address, campaign_id: u64, end_ledger: u32) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         advertiser.require_auth();
 
         let lifecycle = CampaignLifecycle {
@@ -141,12 +149,12 @@ impl CampaignLifecycleContract {
         };
 
         let _ttl_key = DataKey::Lifecycle(campaign_id);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &lifecycle);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &lifecycle);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         let count: u64 = env
             .storage()
@@ -165,7 +173,9 @@ impl CampaignLifecycleContract {
         new_state: LifecycleState,
         reason: String,
     ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         actor.require_auth();
 
         let mut lifecycle: CampaignLifecycle = env
@@ -223,12 +233,12 @@ impl CampaignLifecycleContract {
         lifecycle.state = new_state.clone();
 
         let _ttl_key = DataKey::Lifecycle(campaign_id);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &lifecycle);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &lifecycle);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         // Record transition
         let count: u32 = env
@@ -244,19 +254,19 @@ impl CampaignLifecycleContract {
             timestamp: now,
         };
         let _ttl_key = DataKey::Transition(campaign_id, count);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &transition);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &transition);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
         let _ttl_key = DataKey::TransitionCount(campaign_id);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &(count + 1));
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &(count + 1));
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("lifecycle"), symbol_short!("transit")),
@@ -265,7 +275,9 @@ impl CampaignLifecycleContract {
     }
 
     pub fn extend_campaign(env: Env, advertiser: Address, campaign_id: u64, extra_ledgers: u32) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         advertiser.require_auth();
 
         let mut lifecycle: CampaignLifecycle = env
@@ -294,7 +306,9 @@ impl CampaignLifecycleContract {
         }
 
         // Enforce maximum total duration (original_end_ledger * MAX_DURATION_MULTIPLIER)
-        let max_end = lifecycle.original_end_ledger.saturating_mul(MAX_DURATION_MULTIPLIER);
+        let max_end = lifecycle
+            .original_end_ledger
+            .saturating_mul(MAX_DURATION_MULTIPLIER);
         let new_end = lifecycle.current_end_ledger.saturating_add(extra_ledgers);
         if new_end > max_end {
             panic!("extension exceeds max campaign duration");
@@ -304,30 +318,36 @@ impl CampaignLifecycleContract {
         lifecycle.extension_count += 1;
 
         let _ttl_key = DataKey::Lifecycle(campaign_id);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &lifecycle);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &lifecycle);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn get_lifecycle(env: Env, campaign_id: u64) -> Option<CampaignLifecycle> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .persistent()
             .get(&DataKey::Lifecycle(campaign_id))
     }
 
     pub fn get_transition(env: Env, campaign_id: u64, index: u32) -> Option<StateTransition> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .persistent()
             .get(&DataKey::Transition(campaign_id, index))
     }
 
     pub fn get_transition_count(env: Env, campaign_id: u64) -> u32 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .persistent()
             .get(&DataKey::TransitionCount(campaign_id))
@@ -336,10 +356,24 @@ impl CampaignLifecycleContract {
 
     fn _validate_transition(from: &LifecycleState, to: &LifecycleState) {
         let valid = match from {
-            LifecycleState::Draft => matches!(to, LifecycleState::PendingReview | LifecycleState::Cancelled),
-            LifecycleState::PendingReview => matches!(to, LifecycleState::Active | LifecycleState::Rejected | LifecycleState::Cancelled),
-            LifecycleState::Active => matches!(to, LifecycleState::Paused | LifecycleState::Completed | LifecycleState::Cancelled | LifecycleState::Expired),
-            LifecycleState::Paused => matches!(to, LifecycleState::Active | LifecycleState::Cancelled),
+            LifecycleState::Draft => matches!(
+                to,
+                LifecycleState::PendingReview | LifecycleState::Cancelled
+            ),
+            LifecycleState::PendingReview => matches!(
+                to,
+                LifecycleState::Active | LifecycleState::Rejected | LifecycleState::Cancelled
+            ),
+            LifecycleState::Active => matches!(
+                to,
+                LifecycleState::Paused
+                    | LifecycleState::Completed
+                    | LifecycleState::Cancelled
+                    | LifecycleState::Expired
+            ),
+            LifecycleState::Paused => {
+                matches!(to, LifecycleState::Active | LifecycleState::Cancelled)
+            }
             _ => false,
         };
         if !valid {

@@ -2,17 +2,14 @@
 //! Price feeds and external data oracle integration on Stellar.
 
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    Address, Env, String,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String};
 
 #[contracttype]
 #[derive(Clone)]
 pub struct PriceFeed {
     pub asset: String,
-    pub price_usd: i128,   // price in USD * 1e7
-    pub confidence: u32,   // 0-100
+    pub price_usd: i128, // price in USD * 1e7
+    pub confidence: u32, // 0-100
     pub timestamp: u64,
     pub source: String,
 }
@@ -31,7 +28,7 @@ pub struct PerformanceData {
 #[contracttype]
 pub enum DataKey {
     Admin,
-    PriceFeed(String),   // asset symbol
+    PriceFeed(String),    // asset symbol
     PerformanceData(u64), // campaign_id
     OracleCount,
     AuthorizedOracle(Address),
@@ -48,7 +45,9 @@ pub struct OracleIntegrationContract;
 #[contractimpl]
 impl OracleIntegrationContract {
     pub fn initialize(env: Env, admin: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
@@ -58,7 +57,9 @@ impl OracleIntegrationContract {
     }
 
     pub fn add_oracle(env: Env, admin: Address, oracle: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -66,20 +67,34 @@ impl OracleIntegrationContract {
         }
         let _ttl_key = DataKey::AuthorizedOracle(oracle.clone());
         env.storage().persistent().set(&_ttl_key, &true);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
-        let count: u32 = env.storage().instance().get(&DataKey::OracleCount).unwrap_or(0);
-        env.storage().instance().set(&DataKey::OracleCount, &(count + 1));
+        let count: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::OracleCount)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::OracleCount, &(count + 1));
     }
 
     pub fn remove_oracle(env: Env, admin: Address, oracle: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
             panic!("unauthorized");
         }
-        env.storage().persistent().remove(&DataKey::AuthorizedOracle(oracle));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::AuthorizedOracle(oracle));
     }
 
     pub fn update_price(
@@ -90,7 +105,9 @@ impl OracleIntegrationContract {
         confidence: u32,
         source: String,
     ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         oracle.require_auth();
         Self::_require_oracle(&env, &oracle);
 
@@ -104,7 +121,11 @@ impl OracleIntegrationContract {
 
         let _ttl_key = DataKey::PriceFeed(asset.clone());
         env.storage().persistent().set(&_ttl_key, &feed);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("oracle"), symbol_short!("price")),
@@ -121,7 +142,9 @@ impl OracleIntegrationContract {
         conversions: u64,
         fraud_score: u32,
     ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         oracle.require_auth();
         Self::_require_oracle(&env, &oracle);
 
@@ -136,7 +159,11 @@ impl OracleIntegrationContract {
 
         let _ttl_key = DataKey::PerformanceData(campaign_id);
         env.storage().persistent().set(&_ttl_key, &data);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("oracle"), symbol_short!("perf")),
@@ -145,18 +172,29 @@ impl OracleIntegrationContract {
     }
 
     pub fn get_price(env: Env, asset: String) -> Option<PriceFeed> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage().persistent().get(&DataKey::PriceFeed(asset))
     }
 
     pub fn get_performance(env: Env, campaign_id: u64) -> Option<PerformanceData> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::PerformanceData(campaign_id))
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::PerformanceData(campaign_id))
     }
 
     pub fn is_oracle_authorized(env: Env, oracle: Address) -> bool {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::AuthorizedOracle(oracle)).unwrap_or(false)
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::AuthorizedOracle(oracle))
+            .unwrap_or(false)
     }
 
     fn _require_oracle(env: &Env, oracle: &Address) {

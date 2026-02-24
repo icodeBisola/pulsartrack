@@ -1,7 +1,7 @@
 #![cfg(test)]
 use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::Address as _,
     token::{Client as TokenClient, StellarAssetClient},
     Address, Env,
 };
@@ -9,10 +9,11 @@ use soroban_sdk::{
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 fn deploy_token(env: &Env, admin: &Address) -> Address {
-    env.register_stellar_asset_contract_v2(admin.clone()).address()
+    env.register_stellar_asset_contract_v2(admin.clone())
+        .address()
 }
 
-fn mint(env: &Env, token_addr: &Address, admin: &Address, to: &Address, amount: i128) {
+fn mint(env: &Env, token_addr: &Address, _admin: &Address, to: &Address, amount: i128) {
     let sac = StellarAssetClient::new(env, token_addr);
     sac.mint(to, &amount);
 }
@@ -20,7 +21,7 @@ fn mint(env: &Env, token_addr: &Address, admin: &Address, to: &Address, amount: 
 fn setup(
     env: &Env,
 ) -> (
-    PaymentProcessorContractClient,
+    PaymentProcessorContractClient<'_>,
     Address, // admin
     Address, // treasury
     Address, // token_admin

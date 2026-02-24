@@ -2,10 +2,7 @@
 //! Campaign milestone tracking and performance-based payment releases on Stellar.
 
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    Address, Env, String,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String};
 
 #[contracttype]
 #[derive(Clone, PartialEq)]
@@ -53,14 +50,20 @@ pub struct MilestoneTrackerContract;
 #[contractimpl]
 impl MilestoneTrackerContract {
     pub fn initialize(env: Env, admin: Address, oracle: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::OracleAddress, &oracle);
-        env.storage().instance().set(&DataKey::MilestoneCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::OracleAddress, &oracle);
+        env.storage()
+            .instance()
+            .set(&DataKey::MilestoneCounter, &0u64);
     }
 
     pub fn create_milestone(
@@ -73,10 +76,16 @@ impl MilestoneTrackerContract {
         reward_amount: i128,
         deadline_ledger: u32,
     ) -> u64 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         advertiser.require_auth();
 
-        let counter: u64 = env.storage().instance().get(&DataKey::MilestoneCounter).unwrap_or(0);
+        let counter: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MilestoneCounter)
+            .unwrap_or(0);
         let milestone_id = counter + 1;
 
         let milestone = Milestone {
@@ -95,8 +104,14 @@ impl MilestoneTrackerContract {
 
         let _ttl_key = DataKey::Milestone(milestone_id);
         env.storage().persistent().set(&_ttl_key, &milestone);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
-        env.storage().instance().set(&DataKey::MilestoneCounter, &milestone_id);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::MilestoneCounter, &milestone_id);
 
         let m_count: u64 = env
             .storage()
@@ -104,25 +119,26 @@ impl MilestoneTrackerContract {
             .get(&DataKey::CampaignMilestoneCount(campaign_id))
             .unwrap_or(0);
         let _ttl_key = DataKey::CampaignMilestoneCount(campaign_id);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &(m_count + 1));
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &(m_count + 1));
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         milestone_id
     }
 
-    pub fn update_progress(
-        env: Env,
-        oracle: Address,
-        milestone_id: u64,
-        current_value: u64,
-    ) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    pub fn update_progress(env: Env, oracle: Address, milestone_id: u64, current_value: u64) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         oracle.require_auth();
-        let stored_oracle: Address = env.storage().instance().get(&DataKey::OracleAddress).unwrap();
+        let stored_oracle: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::OracleAddress)
+            .unwrap();
         if oracle != stored_oracle {
             panic!("unauthorized");
         }
@@ -155,11 +171,17 @@ impl MilestoneTrackerContract {
 
         let _ttl_key = DataKey::Milestone(milestone_id);
         env.storage().persistent().set(&_ttl_key, &milestone);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn dispute_milestone(env: Env, caller: Address, milestone_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         caller.require_auth();
 
         let mut milestone: Milestone = env
@@ -171,11 +193,17 @@ impl MilestoneTrackerContract {
         milestone.status = MilestoneStatus::Disputed;
         let _ttl_key = DataKey::Milestone(milestone_id);
         env.storage().persistent().set(&_ttl_key, &milestone);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn resolve_dispute(env: Env, admin: Address, milestone_id: u64, achieved: bool) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -196,17 +224,30 @@ impl MilestoneTrackerContract {
 
         let _ttl_key = DataKey::Milestone(milestone_id);
         env.storage().persistent().set(&_ttl_key, &milestone);
-        env.storage().persistent().extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     pub fn get_milestone(env: Env, milestone_id: u64) -> Option<Milestone> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::Milestone(milestone_id))
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::Milestone(milestone_id))
     }
 
     pub fn get_campaign_milestone_count(env: Env, campaign_id: u64) -> u64 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        env.storage().persistent().get(&DataKey::CampaignMilestoneCount(campaign_id)).unwrap_or(0)
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .persistent()
+            .get(&DataKey::CampaignMilestoneCount(campaign_id))
+            .unwrap_or(0)
     }
 }
 
