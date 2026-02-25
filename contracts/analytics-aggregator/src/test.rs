@@ -1,8 +1,8 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, Env};
 
-fn setup(env: &Env) -> (AnalyticsAggregatorContractClient, Address) {
+fn setup(env: &Env) -> (AnalyticsAggregatorContractClient<'_>, Address) {
     let admin = Address::generate(env);
     let oracle = Address::generate(env);
     let id = env.register_contract(None, AnalyticsAggregatorContract);
@@ -12,16 +12,23 @@ fn setup(env: &Env) -> (AnalyticsAggregatorContractClient, Address) {
 }
 
 #[test]
-fn test_initialize() { let env = Env::default(); env.mock_all_auths(); setup(&env); }
+fn test_initialize() {
+    let env = Env::default();
+    env.mock_all_auths();
+    setup(&env);
+}
 
 #[test]
 #[should_panic(expected = "already initialized")]
 fn test_initialize_twice() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let id = env.register_contract(None, AnalyticsAggregatorContract);
     let c = AnalyticsAggregatorContractClient::new(&env, &id);
-    let a = Address::generate(&env); let o = Address::generate(&env);
-    c.initialize(&a, &o); c.initialize(&a, &o);
+    let a = Address::generate(&env);
+    let o = Address::generate(&env);
+    c.initialize(&a, &o);
+    c.initialize(&a, &o);
 }
 
 #[test]
@@ -35,7 +42,8 @@ fn test_initialize_non_admin_fails() {
 
 #[test]
 fn test_record_impression() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
     let caller = Address::generate(&env);
     c.record_impression(&caller, &1u64, &100i128);
@@ -45,7 +53,8 @@ fn test_record_impression() {
 
 #[test]
 fn test_record_click() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
     let caller = Address::generate(&env);
     c.record_impression(&caller, &1u64, &100i128);
@@ -56,14 +65,16 @@ fn test_record_click() {
 
 #[test]
 fn test_get_campaign_analytics_nonexistent() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
     assert!(c.get_campaign_analytics(&999u64).is_none());
 }
 
 #[test]
 fn test_get_global_stats() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
     let stats = c.get_global_stats();
     assert_eq!(stats.total_campaigns, 0);

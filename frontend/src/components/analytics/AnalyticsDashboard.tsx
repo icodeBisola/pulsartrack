@@ -4,6 +4,7 @@ import { Campaign } from "@/types/contracts";
 import { MetricsCard } from "./MetricsCard";
 import { ImpressionChart } from "./ImpressionChart";
 import { formatXlm, formatNumber } from "@/lib/display-utils";
+import { useAnalyticsTimeseries } from "@/hooks/useAnalytics";
 
 interface AnalyticsDashboardProps {
   campaigns: Campaign[];
@@ -11,31 +12,7 @@ interface AnalyticsDashboardProps {
   onTimeframeChange?: (tf: "7d" | "30d" | "90d") => void;
 }
 
-function buildChartData(campaigns: Campaign[], days: number) {
-  // Build last N days labels
-  const points = [];
-  const now = Date.now();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now - i * 86400000);
-    const label =
-      days <= 7
-        ? d.toLocaleDateString("en", { weekday: "short" })
-        : `${d.getMonth() + 1}/${d.getDate()}`;
-    // Mock distribution of campaign stats across days
-    const fraction = (1 + Math.sin(i * 0.5)) / 2; // wavy curve for demo
-    const totalImpressions = campaigns.reduce(
-      (acc, c) => acc + Number(c.impressions),
-      0,
-    );
-    const totalClicks = campaigns.reduce((acc, c) => acc + Number(c.clicks), 0);
-    points.push({
-      label,
-      impressions: Math.round((totalImpressions / days) * fraction),
-      clicks: Math.round((totalClicks / days) * fraction),
-    });
-  }
-  return points;
-}
+// ...existing code...
 
 export function AnalyticsDashboard({
   campaigns,
@@ -55,11 +32,11 @@ export function AnalyticsDashboard({
       : "0";
 
   const days = timeframe === "7d" ? 7 : timeframe === "30d" ? 30 : 90;
-  const chartData = buildChartData(campaigns, days);
+  const campaignIds = campaigns.map(c => c.campaign_id.toString());
+  const { data: timeseries, loading, error } = useAnalyticsTimeseries({ campaignIds, timeframe: days === 7 ? "7d" : "30d" });
 
   return (
     <div className="space-y-6">
-      {/* Timeframe selector */}
       <div className="flex items-center justify-between">
         <h2 className="text-white font-semibold text-lg">Analytics</h2>
         {onTimeframeChange && (
@@ -68,11 +45,10 @@ export function AnalyticsDashboard({
               <button
                 key={tf}
                 onClick={() => onTimeframeChange(tf)}
-                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                  timeframe === tf
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${timeframe === tf
                     ? "bg-indigo-600 text-white"
                     : "text-gray-400 hover:text-white"
-                }`}
+                  }`}
               >
                 {tf}
               </button>
@@ -81,7 +57,6 @@ export function AnalyticsDashboard({
         )}
       </div>
 
-      {/* Key metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <MetricsCard
           label="Impressions"
@@ -109,12 +84,24 @@ export function AnalyticsDashboard({
         />
       </div>
 
-      {/* Chart */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
         <h3 className="text-sm font-medium text-gray-300 mb-4">
           Impressions & Clicks — Last {days} Days
         </h3>
-        <ImpressionChart data={chartData} height={180} />
+        {error ? (
+          <div className="text-yellow-400 text-xs mb-2">
+            Sample data — deploy contracts to see real metrics
+          </div>
+        ) : null}
+        <ImpressionChart data={
+          !loading && timeseries && timeseries.length > 0
+            ? timeseries.map((point) => ({
+              label: point.date,
+              impressions: point.impressions,
+              clicks: point.clicks,
+            }))
+            : []
+        } height={180} />
       </div>
 
       {/* Campaign breakdown */}
@@ -138,9 +125,9 @@ export function AnalyticsDashboard({
                 const campaignCtr =
                   c.impressions > 0
                     ? (
-                        (Number(c.clicks) / Number(c.impressions)) *
-                        100
-                      ).toFixed(2)
+                      (Number(c.clicks) / Number(c.impressions)) *
+                      100
+                    ).toFixed(2)
                     : "0.00";
                 return (
                   <tr

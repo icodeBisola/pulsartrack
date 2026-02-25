@@ -3,16 +3,17 @@ use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
-    Address, Env, vec,
+    vec, Address, Env,
 };
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 fn deploy_token(env: &Env, admin: &Address) -> Address {
-    env.register_stellar_asset_contract_v2(admin.clone()).address()
+    env.register_stellar_asset_contract_v2(admin.clone())
+        .address()
 }
 
-fn setup(env: &Env) -> (EscrowVaultContractClient, Address, Address, Address) {
+fn setup(env: &Env) -> (EscrowVaultContractClient<'_>, Address, Address, Address) {
     let admin = Address::generate(env);
     let token_admin = Address::generate(env);
     let oracle = Address::generate(env);
@@ -25,7 +26,7 @@ fn setup(env: &Env) -> (EscrowVaultContractClient, Address, Address, Address) {
     (client, admin, token_addr, oracle)
 }
 
-fn mint(env: &Env, token_admin: &Address, token_addr: &Address, to: &Address, amount: i128) {
+fn mint(env: &Env, _token_admin: &Address, token_addr: &Address, to: &Address, amount: i128) {
     let sac = StellarAssetClient::new(env, token_addr);
     sac.mint(to, &amount);
 }
@@ -100,8 +101,8 @@ fn test_create_escrow() {
         &1u64,
         &beneficiary,
         &100_000i128,
-        &0u64,  // no time lock
-        &0u32,  // 0% performance threshold
+        &0u64, // no time lock
+        &0u32, // 0% performance threshold
         &86_400u64,
         &vec![&env, approver.clone()],
     );
@@ -192,14 +193,48 @@ fn test_approve_release() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &86_400u64,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &86_400u64,
         &vec![&env, approver.clone()],
     );
 
     assert_eq!(client.get_approval_count(&escrow_id), 0);
     client.approve_release(&approver, &escrow_id);
     assert_eq!(client.get_approval_count(&escrow_id), 1);
+}
+
+#[test]
+#[should_panic(expected = "already approved")]
+fn test_approve_release_duplicate_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin, token_addr, _oracle) = setup(&env);
+    let _token_admin = Address::generate(&env); // Setup uses Address::generate but we need a way to mint or just use the setup's token
+
+    let depositor = Address::generate(&env);
+    let beneficiary = Address::generate(&env);
+    let approver = Address::generate(&env);
+    
+    // Use setup directly to avoid redundant boilerplate
+    let sac = StellarAssetClient::new(&env, &token_addr);
+    sac.mint(&depositor, &1_000_000);
+
+    let escrow_id = client.create_escrow(
+        &depositor, &1u64, &beneficiary, &100_000i128,
+        &0u64, &0u32, &86_400u64,
+        &vec![&env, approver.clone()],
+    );
+
+    client.approve_release(&approver, &escrow_id);
+    assert_eq!(client.get_approval_count(&escrow_id), 1);
+    
+    // Attempt second approval from same address
+    client.approve_release(&approver, &escrow_id); // should panic
 }
 
 #[test]
@@ -221,9 +256,14 @@ fn test_approve_release_unauthorized() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &86_400u64,
-        &vec![&env],  // no required approvers
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &86_400u64,
+        &vec![&env], // no required approvers
     );
 
     client.approve_release(&stranger, &escrow_id); // should panic
@@ -249,8 +289,13 @@ fn test_release_escrow() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &999_999u64,  // far-future expiry
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &999_999u64, // far-future expiry
         &vec![&env, approver.clone()],
     );
 
@@ -285,9 +330,13 @@ fn test_release_escrow_time_lock_active() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
         &3600u64, // 1 hour time lock — still active
-        &0u32, &999_999u64,
+        &0u32,
+        &999_999u64,
         &vec![&env, approver.clone()],
     );
 
@@ -313,9 +362,14 @@ fn test_release_escrow_no_approval() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &999_999u64,
-        &vec![&env],  // no approvers registered → count stays 0
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &999_999u64,
+        &vec![&env], // no approvers registered → count stays 0
     );
 
     // min_threshold = 1, approvals = 0 → panic
@@ -342,8 +396,13 @@ fn test_release_escrow_unauthorized_caller() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &999_999u64,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &999_999u64,
         &vec![&env, approver.clone()],
     );
 
@@ -371,8 +430,13 @@ fn test_release_partial() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &999_999u64,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &999_999u64,
         &vec![&env, approver.clone()],
     );
 
@@ -406,8 +470,13 @@ fn test_release_partial_exceeds_locked() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &999_999u64,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &999_999u64,
         &vec![&env, approver.clone()],
     );
 
@@ -435,8 +504,13 @@ fn test_refund_escrow() {
 
     // expires_in = 100 seconds from now (ledger timestamp = 0 by default)
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &100u64,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &100u64,
         &vec![&env],
     );
 
@@ -473,8 +547,13 @@ fn test_refund_escrow_not_expired() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &999_999u64, // far future expiry
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &999_999u64, // far future expiry
         &vec![&env],
     );
 
@@ -501,8 +580,13 @@ fn test_update_performance() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &80u32, &999_999u64,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &80u32,
+        &999_999u64,
         &vec![&env, approver.clone()],
     );
 
@@ -532,8 +616,13 @@ fn test_update_performance_unauthorized() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &999_999u64,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &999_999u64,
         &vec![&env],
     );
 
@@ -561,8 +650,13 @@ fn test_release_blocked_by_performance_threshold() {
 
     // performance_threshold = 80, but we'll record only 50
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &80u32, &999_999u64,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &80u32,
+        &999_999u64,
         &vec![&env, approver.clone()],
     );
 
@@ -593,8 +687,13 @@ fn test_hold_for_fraud() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &999_999u64,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &999_999u64,
         &vec![&env],
     );
 
@@ -626,8 +725,13 @@ fn test_release_disputed_escrow_fails() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &999_999u64,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &999_999u64,
         &vec![&env, approver.clone()],
     );
 
@@ -656,12 +760,56 @@ fn test_can_release_returns_true_when_conditions_met() {
     mint(&env, &token_admin, &token_addr, &depositor, 1_000_000);
 
     let escrow_id = client.create_escrow(
-        &depositor, &1u64, &beneficiary, &100_000i128,
-        &0u64, &0u32, &999_999u64,
+        &depositor,
+        &1u64,
+        &beneficiary,
+        &100_000i128,
+        &0u64,
+        &0u32,
+        &999_999u64,
         &vec![&env, approver.clone()],
     );
 
     assert!(!client.can_release(&escrow_id)); // no approval yet
     client.approve_release(&approver, &escrow_id);
     assert!(client.can_release(&escrow_id)); // now it can
+}
+#[test]
+fn test_admin_transfer_flow() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, admin, _, _) = setup(&env);
+    let new_admin = Address::generate(&env);
+
+    c.propose_admin(&admin, &new_admin);
+    c.accept_admin(&new_admin);
+
+    // Verify new admin can perform admin actions
+    let fraud = Address::generate(&env);
+    c.set_fraud_contract(&new_admin, &fraud);
+}
+
+#[test]
+#[should_panic]
+fn test_propose_admin_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, _, _, _) = setup(&env);
+    let stranger = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    c.propose_admin(&stranger, &new_admin);
+}
+
+#[test]
+#[should_panic]
+fn test_accept_admin_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (c, admin, _, _) = setup(&env);
+    let new_admin = Address::generate(&env);
+    let stranger = Address::generate(&env);
+
+    c.propose_admin(&admin, &new_admin);
+    c.accept_admin(&stranger);
 }

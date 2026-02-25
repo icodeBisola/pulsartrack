@@ -1,12 +1,14 @@
 //! PulsarTrack - Campaign Orchestrator (Soroban)
 //! Advanced decentralized advertising campaign orchestration on Stellar.
 
-
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    token, Address, Env, String,
+    contract, contractimpl, contracttype, symbol_short, token, Address, Env, String,
+    IntoVal, Symbol, Val, Vec as SdkVec,
 };
+
+// Define external contract interfaces for cross-contract calls
+// These match the actual contract implementations
 
 // ============================================================
 // Data Types
@@ -87,8 +89,10 @@ pub struct CampaignMetrics {
 // ============================================================
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
+    PendingAdmin,
     TokenAddress,
     MinCampaignAmount,
     PlatformFeePct,
@@ -99,6 +103,11 @@ pub enum DataKey {
     Publisher(Address),
     AdvertiserStats(Address),
     DailyViews(u64, u64),
+    // Contract addresses for cross-contract validation
+    LifecycleContract,
+    EscrowContract,
+    TargetingContract,
+    AuctionContract,
 }
 
 // ============================================================
@@ -117,7 +126,9 @@ pub struct CampaignOrchestratorContract;
 impl CampaignOrchestratorContract {
     /// Initialize the contract
     pub fn initialize(env: Env, admin: Address, token_address: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
@@ -151,6 +162,47 @@ impl CampaignOrchestratorContract {
             .set(&DataKey::CampaignType(1), &default_type);
     }
 
+    /// Set contract addresses for cross-contract validation (admin only)
+    pub fn set_lifecycle_contract(env: Env, admin: Address, contract_address: Address) {
+        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if admin != stored_admin {
+            panic!("unauthorized");
+        }
+        env.storage().instance().set(&DataKey::LifecycleContract, &contract_address);
+    }
+
+    pub fn set_escrow_contract(env: Env, admin: Address, contract_address: Address) {
+        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if admin != stored_admin {
+            panic!("unauthorized");
+        }
+        env.storage().instance().set(&DataKey::EscrowContract, &contract_address);
+    }
+
+    pub fn set_targeting_contract(env: Env, admin: Address, contract_address: Address) {
+        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if admin != stored_admin {
+            panic!("unauthorized");
+        }
+        env.storage().instance().set(&DataKey::TargetingContract, &contract_address);
+    }
+
+    pub fn set_auction_contract(env: Env, admin: Address, contract_address: Address) {
+        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if admin != stored_admin {
+            panic!("unauthorized");
+        }
+        env.storage().instance().set(&DataKey::AuctionContract, &contract_address);
+    }
+
     /// Create a new ad campaign
     pub fn create_campaign(
         env: Env,
@@ -163,7 +215,9 @@ impl CampaignOrchestratorContract {
         daily_view_limit: u64,
         refundable: bool,
     ) -> u64 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         advertiser.require_auth();
 
         let campaign_type_data: CampaignType = env
@@ -175,7 +229,8 @@ impl CampaignOrchestratorContract {
         if budget < campaign_type_data.min_budget {
             panic!("budget too low");
         }
-        if duration < campaign_type_data.min_duration || duration > campaign_type_data.max_duration {
+        if duration < campaign_type_data.min_duration || duration > campaign_type_data.max_duration
+        {
             panic!("invalid duration");
         }
 
@@ -194,7 +249,11 @@ impl CampaignOrchestratorContract {
         let platform_fee = (budget * platform_fee_pct as i128) / 100;
 
         // Transfer budget + fee from advertiser to this contract
-        let token_addr: Address = env.storage().instance().get(&DataKey::TokenAddress).unwrap();
+        let token_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenAddress)
+            .unwrap();
         let token_client = token::Client::new(&env, &token_addr);
         token_client.transfer(
             &advertiser,
@@ -224,12 +283,12 @@ impl CampaignOrchestratorContract {
         };
 
         let _ttl_key = DataKey::Campaign(campaign_id);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &campaign);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &campaign);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
         env.storage()
             .instance()
             .set(&DataKey::CampaignCounter, &campaign_id);
@@ -256,8 +315,13 @@ impl CampaignOrchestratorContract {
 
     /// Record a view (publisher earns cost_per_view)
     pub fn record_view(env: Env, campaign_id: u64, publisher: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         publisher.require_auth();
+
+        // CROSS-CONTRACT VALIDATION: Validate campaign status across all contracts
+        Self::_validate_campaign_cross_contract(&env, campaign_id, &publisher);
 
         let mut campaign: Campaign = env
             .storage()
@@ -282,6 +346,10 @@ impl CampaignOrchestratorContract {
             _ => panic!("campaign not active"),
         }
 
+        if campaign.current_views >= campaign.target_views {
+            panic!("campaign target reached");
+        }
+
         if env.ledger().sequence() > campaign.end_ledger {
             panic!("campaign expired");
         }
@@ -300,7 +368,11 @@ impl CampaignOrchestratorContract {
         }
 
         // Transfer payment to publisher
-        let token_addr: Address = env.storage().instance().get(&DataKey::TokenAddress).unwrap();
+        let token_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenAddress)
+            .unwrap();
         let token_client = token::Client::new(&env, &token_addr);
         token_client.transfer(
             &env.current_contract_address(),
@@ -318,12 +390,12 @@ impl CampaignOrchestratorContract {
         }
 
         let _ttl_key = DataKey::Campaign(campaign_id);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &campaign);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &campaign);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
         env.storage()
             .temporary()
             .set(&daily_key, &(daily_views + 1));
@@ -339,7 +411,9 @@ impl CampaignOrchestratorContract {
 
     /// Pause a campaign (advertiser only)
     pub fn pause_campaign(env: Env, advertiser: Address, campaign_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         advertiser.require_auth();
 
         let mut campaign: Campaign = env
@@ -355,17 +429,19 @@ impl CampaignOrchestratorContract {
         campaign.status = CampaignStatus::Paused;
         campaign.last_updated = env.ledger().timestamp();
         let _ttl_key = DataKey::Campaign(campaign_id);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &campaign);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &campaign);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     /// Resume a paused campaign
     pub fn resume_campaign(env: Env, advertiser: Address, campaign_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         advertiser.require_auth();
 
         let mut campaign: Campaign = env
@@ -381,17 +457,19 @@ impl CampaignOrchestratorContract {
         campaign.status = CampaignStatus::Active;
         campaign.last_updated = env.ledger().timestamp();
         let _ttl_key = DataKey::Campaign(campaign_id);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &campaign);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &campaign);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     /// Cancel campaign and refund remaining budget (if refundable)
     pub fn cancel_campaign(env: Env, advertiser: Address, campaign_id: u64) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         advertiser.require_auth();
 
         let mut campaign: Campaign = env
@@ -414,16 +492,19 @@ impl CampaignOrchestratorContract {
         campaign.last_updated = env.ledger().timestamp();
 
         let _ttl_key = DataKey::Campaign(campaign_id);
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &campaign);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &campaign);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         if refund > 0 {
-            let token_addr: Address =
-                env.storage().instance().get(&DataKey::TokenAddress).unwrap();
+            let token_addr: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::TokenAddress)
+                .unwrap();
             let token_client = token::Client::new(&env, &token_addr);
             token_client.transfer(&env.current_contract_address(), &advertiser, &refund);
         }
@@ -436,7 +517,9 @@ impl CampaignOrchestratorContract {
 
     /// Admin: verify a publisher
     pub fn verify_publisher(env: Env, admin: Address, publisher: Address, initial_score: u32) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -452,12 +535,12 @@ impl CampaignOrchestratorContract {
         };
 
         let _ttl_key = DataKey::Publisher(publisher.clone());
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &publisher_data);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &publisher_data);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         env.events().publish(
             (symbol_short!("publisher"), symbol_short!("verified")),
@@ -467,7 +550,9 @@ impl CampaignOrchestratorContract {
 
     /// Admin: set platform fee
     pub fn set_platform_fee(env: Env, admin: Address, fee_pct: u32) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -486,14 +571,18 @@ impl CampaignOrchestratorContract {
     // ============================================================
 
     pub fn get_campaign(env: Env, campaign_id: u64) -> Option<Campaign> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .persistent()
             .get(&DataKey::Campaign(campaign_id))
     }
 
     pub fn get_campaign_metrics(env: Env, campaign_id: u64) -> Option<CampaignMetrics> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         let campaign: Campaign = env
             .storage()
             .persistent()
@@ -514,21 +603,27 @@ impl CampaignOrchestratorContract {
     }
 
     pub fn get_publisher_metrics(env: Env, publisher: Address) -> Option<VerifiedPublisher> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .persistent()
             .get(&DataKey::Publisher(publisher))
     }
 
     pub fn get_advertiser_stats(env: Env, advertiser: Address) -> Option<AdvertiserStats> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .persistent()
             .get(&DataKey::AdvertiserStats(advertiser))
     }
 
     pub fn get_campaign_count(env: Env) -> u64 {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .instance()
             .get(&DataKey::CampaignCounter)
@@ -538,6 +633,83 @@ impl CampaignOrchestratorContract {
     // ============================================================
     // Internal Helpers
     // ============================================================
+
+    /// Validate campaign across all contracts before processing
+    fn _validate_campaign_cross_contract(env: &Env, campaign_id: u64, publisher: &Address) {
+        // 1. Validate campaign lifecycle status
+        if let Some(lifecycle_addr) = env.storage().instance().get::<DataKey, Address>(&DataKey::LifecycleContract) {
+            // Call get_lifecycle on the lifecycle contract
+            let lifecycle_result: Option<Val> = env.invoke_contract(
+                &lifecycle_addr,
+                &Symbol::new(env, "get_lifecycle"),
+                SdkVec::from_array(env, [campaign_id.into_val(env)]),
+            );
+            
+            if lifecycle_result.is_none() {
+                panic!("campaign not found in lifecycle contract");
+            }
+            
+            // Note: In production, you would deserialize the result and check the state
+            // For now, we're validating that the campaign exists in the lifecycle contract
+        }
+
+        // 2. Validate escrow has sufficient budget
+        if let Some(escrow_addr) = env.storage().instance().get::<DataKey, Address>(&DataKey::EscrowContract) {
+            // Call get_escrow on the escrow contract
+            let escrow_result: Option<Val> = env.invoke_contract(
+                &escrow_addr,
+                &Symbol::new(env, "get_escrow"),
+                SdkVec::from_array(env, [campaign_id.into_val(env)]),
+            );
+            
+            // If escrow exists, validate it can be released (has budget)
+            if escrow_result.is_some() {
+                let can_release: bool = env.invoke_contract(
+                    &escrow_addr,
+                    &Symbol::new(env, "can_release"),
+                    SdkVec::from_array(env, [campaign_id.into_val(env)]),
+                );
+                
+                if !can_release {
+                    panic!("escrow cannot be released - insufficient budget or conditions not met");
+                }
+            }
+        }
+
+        // 3. Validate publisher matches targeting rules
+        if let Some(targeting_addr) = env.storage().instance().get::<DataKey, Address>(&DataKey::TargetingContract) {
+            // Call get_targeting to check if targeting config exists
+            let targeting_result: Option<Val> = env.invoke_contract(
+                &targeting_addr,
+                &Symbol::new(env, "get_targeting"),
+                SdkVec::from_array(env, [campaign_id.into_val(env)]),
+            );
+            
+            // If targeting config exists, check publisher score
+            if targeting_result.is_some() {
+                // Try to get the targeting score for this publisher
+                let score_result: Option<Val> = env.invoke_contract(
+                    &targeting_addr,
+                    &Symbol::new(env, "get_score"),
+                    SdkVec::from_array(env, [
+                        campaign_id.into_val(env),
+                        publisher.into_val(env),
+                    ]),
+                );
+                
+                // If no score exists and targeting is configured, publisher may not be eligible
+                if score_result.is_none() {
+                    // In production, you might want to compute the score on-the-fly
+                    // or have a more lenient policy
+                    // For now, we'll allow it but log a warning via events
+                    env.events().publish(
+                        (symbol_short!("warning"), symbol_short!("no_score")),
+                        (campaign_id, publisher.clone()),
+                    );
+                }
+            }
+        }
+    }
 
     fn _update_advertiser_stats(env: &Env, advertiser: &Address, campaign_id: u64, budget: i128) {
         let key = DataKey::AdvertiserStats(advertiser.clone());
@@ -566,7 +738,11 @@ impl CampaignOrchestratorContract {
         };
 
         env.storage().persistent().set(&key, &new_stats);
-        env.storage().persistent().extend_ttl(&key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().extend_ttl(
+            &key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
     }
 
     fn _update_publisher_earnings(env: &Env, publisher: &Address, earning: i128) {
@@ -579,8 +755,26 @@ impl CampaignOrchestratorContract {
             pub_data.total_earnings += earning;
             pub_data.last_active = env.ledger().timestamp();
             env.storage().persistent().set(&key, &pub_data);
-            env.storage().persistent().extend_ttl(&key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+            env.storage().persistent().extend_ttl(
+                &key,
+                PERSISTENT_LIFETIME_THRESHOLD,
+                PERSISTENT_BUMP_AMOUNT,
+            );
         }
+    }
+
+    pub fn propose_admin(env: Env, current_admin: Address, new_admin: Address) {
+        pulsar_common_admin::propose_admin(
+            &env,
+            &DataKey::Admin,
+            &DataKey::PendingAdmin,
+            current_admin,
+            new_admin,
+        );
+    }
+
+    pub fn accept_admin(env: Env, new_admin: Address) {
+        pulsar_common_admin::accept_admin(&env, &DataKey::Admin, &DataKey::PendingAdmin, new_admin);
     }
 }
 

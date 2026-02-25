@@ -1,15 +1,16 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{testutils::Address as _, token::{Client as TokenClient, StellarAssetClient}, Address, Env};
+use soroban_sdk::{testutils::Address as _, token::StellarAssetClient, Address, Env};
 
 fn deploy_token(env: &Env, admin: &Address) -> Address {
-    env.register_stellar_asset_contract_v2(admin.clone()).address()
+    env.register_stellar_asset_contract_v2(admin.clone())
+        .address()
 }
 fn mint(env: &Env, token: &Address, to: &Address, amount: i128) {
     StellarAssetClient::new(env, token).mint(to, &amount);
 }
 
-fn setup(env: &Env) -> (LiquidityPoolContractClient, Address, Address, Address) {
+fn setup(env: &Env) -> (LiquidityPoolContractClient<'_>, Address, Address, Address) {
     let admin = Address::generate(env);
     let token_admin = Address::generate(env);
     let token = deploy_token(env, &token_admin);
@@ -20,19 +21,25 @@ fn setup(env: &Env) -> (LiquidityPoolContractClient, Address, Address, Address) 
 }
 
 #[test]
-fn test_initialize() { let env = Env::default(); env.mock_all_auths(); setup(&env); }
+fn test_initialize() {
+    let env = Env::default();
+    env.mock_all_auths();
+    setup(&env);
+}
 
 #[test]
 #[should_panic(expected = "already initialized")]
 fn test_initialize_twice() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin, _, token) = setup(&env);
     c.initialize(&admin, &token);
 }
 
 #[test]
 fn test_deposit() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _, _, token) = setup(&env);
     let provider = Address::generate(&env);
     mint(&env, &token, &provider, 1_000_000);
@@ -46,7 +53,8 @@ fn test_deposit() {
 
 #[test]
 fn test_withdraw() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _, _, token) = setup(&env);
     let provider = Address::generate(&env);
     mint(&env, &token, &provider, 1_000_000);
@@ -59,7 +67,8 @@ fn test_withdraw() {
 
 #[test]
 fn test_borrow() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _, _, token) = setup(&env);
     let provider = Address::generate(&env);
     let borrower = Address::generate(&env);
@@ -74,7 +83,8 @@ fn test_borrow() {
 
 #[test]
 fn test_repay() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _, _, token) = setup(&env);
     let provider = Address::generate(&env);
     let borrower = Address::generate(&env);
@@ -89,14 +99,16 @@ fn test_repay() {
 
 #[test]
 fn test_get_provider_position_nonexistent() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _, _, _) = setup(&env);
     assert!(c.get_provider_position(&Address::generate(&env)).is_none());
 }
 
 #[test]
 fn test_get_borrow_nonexistent() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _, _, _) = setup(&env);
     assert!(c.get_borrow(&999u64).is_none());
 }

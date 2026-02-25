@@ -9,7 +9,8 @@ use soroban_sdk::{
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 fn deploy_token(env: &Env, admin: &Address) -> Address {
-    env.register_stellar_asset_contract_v2(admin.clone()).address()
+    env.register_stellar_asset_contract_v2(admin.clone())
+        .address()
 }
 
 fn mint(env: &Env, token_addr: &Address, to: &Address, amount: i128) {
@@ -17,7 +18,16 @@ fn mint(env: &Env, token_addr: &Address, to: &Address, amount: i128) {
     sac.mint(to, &amount);
 }
 
-fn setup(env: &Env) -> (RevenueSettlementContractClient, Address, Address, Address, Address, Address) {
+fn setup(
+    env: &Env,
+) -> (
+    RevenueSettlementContractClient<'_>,
+    Address,
+    Address,
+    Address,
+    Address,
+    Address,
+) {
     let admin = Address::generate(env);
     let token_admin = Address::generate(env);
     let token_addr = deploy_token(env, &token_admin);
@@ -78,7 +88,7 @@ fn test_initialize_twice() {
 #[should_panic]
 fn test_initialize_non_admin_fails() {
     let env = Env::default();
-    
+
     let contract_id = env.register_contract(None, RevenueSettlementContract);
     let client = RevenueSettlementContractClient::new(&env, &contract_id);
 
@@ -178,18 +188,22 @@ fn test_distribute_platform_revenue() {
     let publisher = Address::generate(&env);
     client.record_revenue(&admin, &1u64, &100_000i128, &publisher);
 
-    env.ledger().with_mut(|li| { li.timestamp = 1000; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 1000;
+    });
 
     client.distribute_platform_revenue(&admin);
 
     let tc = TokenClient::new(&env, &token_addr);
-    assert_eq!(tc.balance(&platform), 2_500);    // platform share
-    assert_eq!(tc.balance(&treasury), 5_000);    // treasury share
+    assert_eq!(tc.balance(&platform), 2_500); // platform share
+    assert_eq!(tc.balance(&treasury), 5_000); // treasury share
+    assert_eq!(tc.balance(&contract_id), 9_990_000); // includes 2_500 burn from 10_000_000 funding
 
-    // Pool should be reset for platform and treasury
+    // Pool should be reset for platform, treasury, and burn
     let pool = client.get_revenue_pool();
     assert_eq!(pool.platform_share, 0);
     assert_eq!(pool.treasury_share, 0);
+    assert_eq!(pool.burn_amount, 0);
     assert_eq!(pool.last_settlement, 1000);
 }
 

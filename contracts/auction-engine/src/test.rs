@@ -9,7 +9,8 @@ use soroban_sdk::{
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 fn deploy_token(env: &Env, admin: &Address) -> Address {
-    env.register_stellar_asset_contract_v2(admin.clone()).address()
+    env.register_stellar_asset_contract_v2(admin.clone())
+        .address()
 }
 
 fn mint(env: &Env, token_addr: &Address, to: &Address, amount: i128) {
@@ -17,7 +18,7 @@ fn mint(env: &Env, token_addr: &Address, to: &Address, amount: i128) {
     sac.mint(to, &amount);
 }
 
-fn setup(env: &Env) -> (AuctionEngineContractClient, Address, Address, Address) {
+fn setup(env: &Env) -> (AuctionEngineContractClient<'_>, Address, Address, Address) {
     let admin = Address::generate(env);
     let token_admin = Address::generate(env);
     let token_addr = deploy_token(env, &token_admin);
@@ -85,9 +86,9 @@ fn test_create_auction() {
     let auction_id = client.create_auction(
         &publisher,
         &slot(&env),
-        &1_000i128,   // floor
-        &5_000i128,   // reserve
-        &3600u64,     // 1 hour
+        &1_000i128, // floor
+        &5_000i128, // reserve
+        &3600u64,   // 1 hour
     );
 
     assert_eq!(auction_id, 1);
@@ -110,9 +111,8 @@ fn test_place_bid() {
     let publisher = Address::generate(&env);
     let bidder = Address::generate(&env);
 
-    let auction_id = client.create_auction(
-        &publisher, &slot(&env), &1_000i128, &5_000i128, &3600u64,
-    );
+    let auction_id =
+        client.create_auction(&publisher, &slot(&env), &1_000i128, &5_000i128, &3600u64);
 
     client.place_bid(&bidder, &auction_id, &2_000i128, &42u64);
 
@@ -134,9 +134,8 @@ fn test_multiple_bids_highest_wins() {
     let bidder1 = Address::generate(&env);
     let bidder2 = Address::generate(&env);
 
-    let auction_id = client.create_auction(
-        &publisher, &slot(&env), &1_000i128, &5_000i128, &3600u64,
-    );
+    let auction_id =
+        client.create_auction(&publisher, &slot(&env), &1_000i128, &5_000i128, &3600u64);
 
     client.place_bid(&bidder1, &auction_id, &2_000i128, &1u64);
     client.place_bid(&bidder2, &auction_id, &4_000i128, &2u64);
@@ -156,9 +155,7 @@ fn test_bid_stored_by_index() {
     let publisher = Address::generate(&env);
     let bidder = Address::generate(&env);
 
-    let auction_id = client.create_auction(
-        &publisher, &slot(&env), &500i128, &2_000i128, &3600u64,
-    );
+    let auction_id = client.create_auction(&publisher, &slot(&env), &500i128, &2_000i128, &3600u64);
 
     client.place_bid(&bidder, &auction_id, &1_000i128, &99u64);
 
@@ -179,9 +176,8 @@ fn test_bid_below_floor_rejected() {
     let publisher = Address::generate(&env);
     let bidder = Address::generate(&env);
 
-    let auction_id = client.create_auction(
-        &publisher, &slot(&env), &1_000i128, &5_000i128, &3600u64,
-    );
+    let auction_id =
+        client.create_auction(&publisher, &slot(&env), &1_000i128, &5_000i128, &3600u64);
 
     client.place_bid(&bidder, &auction_id, &500i128, &1u64); // below 1_000
 }
@@ -196,9 +192,8 @@ fn test_bid_not_higher_than_current_rejected() {
     let bidder1 = Address::generate(&env);
     let bidder2 = Address::generate(&env);
 
-    let auction_id = client.create_auction(
-        &publisher, &slot(&env), &1_000i128, &5_000i128, &3600u64,
-    );
+    let auction_id =
+        client.create_auction(&publisher, &slot(&env), &1_000i128, &5_000i128, &3600u64);
 
     client.place_bid(&bidder1, &auction_id, &3_000i128, &1u64);
     client.place_bid(&bidder2, &auction_id, &2_000i128, &2u64); // lower than current best
@@ -214,7 +209,11 @@ fn test_bid_after_auction_ended() {
     let bidder = Address::generate(&env);
 
     let auction_id = client.create_auction(
-        &publisher, &slot(&env), &1_000i128, &5_000i128, &100u64, // 100 second duration
+        &publisher,
+        &slot(&env),
+        &1_000i128,
+        &5_000i128,
+        &100u64, // 100 second duration
     );
 
     // advance past end_time
@@ -245,9 +244,8 @@ fn test_settle_auction_with_winner() {
     let bidder = Address::generate(&env);
     mint(&env, &token_addr, &bidder, 100_000);
 
-    let auction_id = client.create_auction(
-        &publisher, &slot(&env), &1_000i128, &2_000i128, &100u64,
-    );
+    let auction_id =
+        client.create_auction(&publisher, &slot(&env), &1_000i128, &2_000i128, &100u64);
 
     client.place_bid(&bidder, &auction_id, &3_000i128, &1u64); // above reserve
 
@@ -284,9 +282,10 @@ fn test_settle_auction_below_reserve_cancelled() {
     mint(&env, &token_addr, &bidder, 100_000);
 
     let auction_id = client.create_auction(
-        &publisher, &slot(&env),
-        &1_000i128,   // floor
-        &10_000i128,  // reserve (high)
+        &publisher,
+        &slot(&env),
+        &1_000i128,  // floor
+        &10_000i128, // reserve (high)
         &100u64,
     );
 
@@ -314,9 +313,8 @@ fn test_settle_auction_no_bids_cancelled() {
     let (client, _, _, _) = setup(&env);
     let publisher = Address::generate(&env);
 
-    let auction_id = client.create_auction(
-        &publisher, &slot(&env), &1_000i128, &5_000i128, &100u64,
-    );
+    let auction_id =
+        client.create_auction(&publisher, &slot(&env), &1_000i128, &5_000i128, &100u64);
 
     env.ledger().with_mut(|li| {
         li.timestamp = 200;
@@ -337,9 +335,8 @@ fn test_settle_auction_still_running() {
     let publisher = Address::generate(&env);
     let bidder = Address::generate(&env);
 
-    let auction_id = client.create_auction(
-        &publisher, &slot(&env), &1_000i128, &5_000i128, &3600u64,
-    );
+    let auction_id =
+        client.create_auction(&publisher, &slot(&env), &1_000i128, &5_000i128, &3600u64);
 
     client.place_bid(&bidder, &auction_id, &2_000i128, &1u64);
     // time has NOT advanced → still running
@@ -355,9 +352,8 @@ fn test_settle_auction_unauthorized() {
     let publisher = Address::generate(&env);
     let stranger = Address::generate(&env);
 
-    let auction_id = client.create_auction(
-        &publisher, &slot(&env), &1_000i128, &5_000i128, &100u64,
-    );
+    let auction_id =
+        client.create_auction(&publisher, &slot(&env), &1_000i128, &5_000i128, &100u64);
 
     env.ledger().with_mut(|li| {
         li.timestamp = 200;
@@ -385,9 +381,8 @@ fn test_admin_can_settle_before_end_time() {
     let bidder = Address::generate(&env);
     mint(&env, &token_addr, &bidder, 100_000);
 
-    let auction_id = client.create_auction(
-        &publisher, &slot(&env), &1_000i128, &2_000i128, &9999u64,
-    );
+    let auction_id =
+        client.create_auction(&publisher, &slot(&env), &1_000i128, &2_000i128, &9999u64);
 
     client.place_bid(&bidder, &auction_id, &5_000i128, &1u64);
 

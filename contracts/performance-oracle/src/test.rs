@@ -2,7 +2,7 @@
 use super::*;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
-fn setup(env: &Env) -> (PerformanceOracleContractClient, Address) {
+fn setup(env: &Env) -> (PerformanceOracleContractClient<'_>, Address) {
     let admin = Address::generate(env);
     let id = env.register_contract(None, PerformanceOracleContract);
     let c = PerformanceOracleContractClient::new(env, &id);
@@ -11,16 +11,22 @@ fn setup(env: &Env) -> (PerformanceOracleContractClient, Address) {
 }
 
 #[test]
-fn test_initialize() { let env = Env::default(); env.mock_all_auths(); setup(&env); }
+fn test_initialize() {
+    let env = Env::default();
+    env.mock_all_auths();
+    setup(&env);
+}
 
 #[test]
 #[should_panic(expected = "already initialized")]
 fn test_initialize_twice() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let id = env.register_contract(None, PerformanceOracleContract);
     let c = PerformanceOracleContractClient::new(&env, &id);
     let a = Address::generate(&env);
-    c.initialize(&a, &2u32); c.initialize(&a, &2u32);
+    c.initialize(&a, &2u32);
+    c.initialize(&a, &2u32);
 }
 
 #[test]
@@ -34,7 +40,8 @@ fn test_initialize_non_admin_fails() {
 
 #[test]
 fn test_authorize_attester() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let attester = Address::generate(&env);
     c.authorize_attester(&admin, &attester);
@@ -42,7 +49,8 @@ fn test_authorize_attester() {
 
 #[test]
 fn test_submit_attestation() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let att = Address::generate(&env);
     let data_hash = BytesN::from_array(&env, &[1u8; 32]);
@@ -54,7 +62,8 @@ fn test_submit_attestation() {
 
 #[test]
 fn test_get_attestation_count() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, admin) = setup(&env);
     let att = Address::generate(&env);
     let data_hash = BytesN::from_array(&env, &[1u8; 32]);
@@ -65,7 +74,8 @@ fn test_get_attestation_count() {
 
 #[test]
 fn test_get_consensus_nonexistent() {
-    let env = Env::default(); env.mock_all_auths();
+    let env = Env::default();
+    env.mock_all_auths();
     let (c, _) = setup(&env);
     assert!(c.get_consensus(&999u64).is_none());
 }

@@ -24,7 +24,22 @@ impl MockGovToken {
 
     /// Called by GovernanceDaoContract::finalize_proposal via invoke_contract.
     pub fn total_supply(env: Env) -> i128 {
-        env.storage().instance().get::<u32, i128>(&0u32).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get::<u32, i128>(&0u32)
+            .unwrap_or(0)
+    }
+
+    /// Set per-address balance for proposer-min-token tests.
+    pub fn set_balance(env: Env, addr: Address, amount: i128) {
+        env.storage().persistent().set(&addr, &amount);
+    }
+
+    pub fn balance(env: Env, id: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get::<Address, i128>(&id)
+            .unwrap_or(1_000_000)
     }
 }
 
@@ -39,30 +54,31 @@ fn deploy_mock_gov_token(env: &Env, total_supply: i128) -> Address {
 }
 
 /// Deploy + initialize with: voting_period=100 ledgers, quorum=10%, pass=51%.
-/// Uses a plain address as the governance token for tests that don't finalize.
-fn setup(env: &Env) -> (GovernanceDaoContractClient, Address, Address, Address) {
+/// Uses a plain address as the governance token for tests that don't need token gating.
+/// Sets proposer_min = 0 so the token-balance check is skipped.
+fn setup(env: &Env) -> (GovernanceDaoContractClient<'_>, Address, Address, Address) {
     let admin = Address::generate(env);
-    // For simple tests (no finalize) any address works as the governance token.
-    let token_addr = Address::generate(env);
+    let token_addr = deploy_mock_gov_token(env, 10_000_000);
 
     let contract_id = env.register_contract(None, GovernanceDaoContract);
     let client = GovernanceDaoContractClient::new(env, &contract_id);
-    client.initialize(&admin, &token_addr, &100u32, &1_000u32, &51u32, &1i128);
+    client.initialize(&admin, &token_addr, &100u32, &1_000u32, &51u32, &0i128);
 
     (client, admin, Address::generate(env), token_addr)
 }
 
 /// Deploy governance-dao initialized with a real MockGovToken (needed for finalize tests).
+/// Sets proposer_min = 0 since these tests focus on finalize/execute, not token gating.
 fn setup_with_mock_token(
     env: &Env,
     total_supply: i128,
-) -> (GovernanceDaoContractClient, Address, Address) {
+) -> (GovernanceDaoContractClient<'_>, Address, Address) {
     let admin = Address::generate(env);
     let token_addr = deploy_mock_gov_token(env, total_supply);
 
     let contract_id = env.register_contract(None, GovernanceDaoContract);
     let client = GovernanceDaoContractClient::new(env, &contract_id);
-    client.initialize(&admin, &token_addr, &100u32, &1_000u32, &51u32, &1i128);
+    client.initialize(&admin, &token_addr, &100u32, &1_000u32, &51u32, &0i128);
 
     (client, admin, token_addr)
 }
@@ -125,12 +141,7 @@ fn test_create_proposal() {
     let (client, _, _, _) = setup(&env);
     let proposer = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer,
-        &make_title(&env),
-        &make_desc(&env),
-        &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     assert_eq!(proposal_id, 1);
     assert_eq!(client.get_proposal_count(), 1);
@@ -166,9 +177,7 @@ fn test_cast_vote_for() {
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cast_vote(&voter, &proposal_id, &VoteChoice::For, &1_000i128);
 
@@ -190,9 +199,7 @@ fn test_cast_vote_against() {
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cast_vote(&voter, &proposal_id, &VoteChoice::Against, &500i128);
 
@@ -209,9 +216,7 @@ fn test_cast_vote_abstain() {
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cast_vote(&voter, &proposal_id, &VoteChoice::Abstain, &200i128);
 
@@ -229,9 +234,7 @@ fn test_vote_tally_accumulates() {
     let voter_b = Address::generate(&env);
     let voter_c = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cast_vote(&voter_a, &proposal_id, &VoteChoice::For, &300i128);
     client.cast_vote(&voter_b, &proposal_id, &VoteChoice::For, &200i128);
@@ -251,9 +254,7 @@ fn test_double_vote_rejected() {
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cast_vote(&voter, &proposal_id, &VoteChoice::For, &1_000i128);
     client.cast_vote(&voter, &proposal_id, &VoteChoice::Against, &1_000i128); // panic
@@ -268,9 +269,7 @@ fn test_vote_zero_power_rejected() {
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cast_vote(&voter, &proposal_id, &VoteChoice::For, &0i128);
 }
@@ -284,9 +283,7 @@ fn test_vote_after_period_ends() {
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     // start=0, period=100 → end=100; advance past it
     env.ledger().with_mut(|li| {
@@ -305,9 +302,7 @@ fn test_vote_on_cancelled_proposal() {
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cancel_proposal(&proposer, &proposal_id);
     client.cast_vote(&voter, &proposal_id, &VoteChoice::For, &1_000i128);
@@ -325,9 +320,7 @@ fn test_finalize_proposal_passed() {
 
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     // 200 for votes  (200*10_000 >= 1_000*1_000 → quorum met; 100% >= 51% → Passed)
     client.cast_vote(&voter, &proposal_id, &VoteChoice::For, &200i128);
@@ -352,9 +345,7 @@ fn test_finalize_proposal_rejected_no_quorum() {
 
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cast_vote(&voter, &proposal_id, &VoteChoice::For, &50i128);
 
@@ -379,14 +370,12 @@ fn test_finalize_proposal_rejected_not_enough_for_votes() {
     let token_addr = deploy_mock_gov_token(&env, 1_000);
     let contract_id = env.register_contract(None, GovernanceDaoContract);
     let client = GovernanceDaoContractClient::new(&env, &contract_id);
-    client.initialize(&admin, &token_addr, &100u32, &1_000u32, &60u32, &1i128);
+    client.initialize(&admin, &token_addr, &100u32, &1_000u32, &60u32, &0i128);
 
     let proposer = Address::generate(&env);
     let voter_for = Address::generate(&env);
     let voter_against = Address::generate(&env);
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cast_vote(&voter_for, &proposal_id, &VoteChoice::For, &400i128);
     client.cast_vote(&voter_against, &proposal_id, &VoteChoice::Against, &600i128);
@@ -409,9 +398,7 @@ fn test_finalize_still_active() {
     let (client, _, _, _) = setup(&env);
     let proposer = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     // sequence_number=0, end_ledger=100 → still active
     client.finalize_proposal(&proposal_id);
@@ -428,9 +415,7 @@ fn test_execute_proposal() {
 
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cast_vote(&voter, &proposal_id, &VoteChoice::For, &200i128);
 
@@ -458,9 +443,7 @@ fn test_execute_active_proposal_fails() {
     let (client, admin, _, _) = setup(&env);
     let proposer = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.execute_proposal(&admin, &proposal_id);
 }
@@ -476,9 +459,7 @@ fn test_execute_proposal_by_stranger_fails() {
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
     let stranger = Address::generate(&env);
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cast_vote(&voter, &proposal_id, &VoteChoice::For, &200i128);
 
@@ -499,9 +480,7 @@ fn test_cancel_proposal_by_proposer() {
     let (client, _, _, _) = setup(&env);
     let proposer = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cancel_proposal(&proposer, &proposal_id);
 
@@ -516,9 +495,7 @@ fn test_cancel_proposal_by_admin() {
     let (client, admin, _, _) = setup(&env);
     let proposer = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cancel_proposal(&admin, &proposal_id);
 
@@ -535,9 +512,7 @@ fn test_cancel_proposal_by_stranger_fails() {
     let proposer = Address::generate(&env);
     let stranger = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     client.cancel_proposal(&stranger, &proposal_id);
 }
@@ -552,9 +527,7 @@ fn test_has_voted_false_before_vote() {
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     assert!(!client.has_voted(&proposal_id, &voter));
 }
@@ -567,9 +540,7 @@ fn test_get_vote_none_before_voting() {
     let proposer = Address::generate(&env);
     let voter = Address::generate(&env);
 
-    let proposal_id = client.create_proposal(
-        &proposer, &make_title(&env), &make_desc(&env), &None,
-    );
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
 
     assert!(client.get_vote(&proposal_id, &voter).is_none());
 }
@@ -590,4 +561,109 @@ fn test_get_proposal_count_initial_zero() {
     let (client, _, _, _) = setup(&env);
 
     assert_eq!(client.get_proposal_count(), 0);
+}
+
+// ─── proposer minimum token enforcement (#76) ────────────────────────────────
+
+/// Deploy MockGovToken with balance support and initialize the DAO with a
+/// non-zero proposer_min. Returns (client, admin, token_addr).
+fn setup_with_token_gate(
+    env: &Env,
+    total_supply: i128,
+    proposer_min: i128,
+) -> (GovernanceDaoContractClient<'_>, Address, Address) {
+    let admin = Address::generate(env);
+    let token_addr = deploy_mock_gov_token(env, total_supply);
+
+    let contract_id = env.register_contract(None, GovernanceDaoContract);
+    let client = GovernanceDaoContractClient::new(env, &contract_id);
+    client.initialize(
+        &admin,
+        &token_addr,
+        &100u32,
+        &1_000u32,
+        &51u32,
+        &proposer_min,
+    );
+
+    (client, admin, token_addr)
+}
+
+#[test]
+fn test_create_proposal_with_sufficient_tokens() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _, token_addr) = setup_with_token_gate(&env, 10_000, 100);
+    let proposer = Address::generate(&env);
+
+    // Give proposer enough tokens
+    MockGovTokenClient::new(&env, &token_addr).set_balance(&proposer, &500);
+
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
+
+    assert_eq!(proposal_id, 1);
+    let proposal = client.get_proposal(&proposal_id).unwrap();
+    assert_eq!(proposal.proposer, proposer);
+}
+
+#[test]
+#[should_panic(expected = "insufficient tokens to create proposal")]
+fn test_create_proposal_insufficient_tokens() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _, token_addr) = setup_with_token_gate(&env, 10_000, 100);
+    let proposer = Address::generate(&env);
+
+    // Give proposer fewer tokens than required
+    MockGovTokenClient::new(&env, &token_addr).set_balance(&proposer, &50);
+
+    // Should panic
+    client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
+}
+
+#[test]
+#[should_panic(expected = "insufficient tokens to create proposal")]
+fn test_create_proposal_zero_balance_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _, token_addr) = setup_with_token_gate(&env, 10_000, 100);
+    let proposer = Address::generate(&env);
+
+    // Proposer has no tokens at all (set explicitly)
+    MockGovTokenClient::new(&env, &token_addr).set_balance(&proposer, &0);
+    client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
+}
+
+#[test]
+fn test_create_proposal_zero_min_allows_anyone() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    // proposer_min = 0 → token check is skipped entirely
+    let (client, _, _) = setup_with_token_gate(&env, 10_000, 0);
+    let proposer = Address::generate(&env);
+
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
+
+    assert_eq!(proposal_id, 1);
+}
+
+#[test]
+fn test_create_proposal_exact_minimum_accepted() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let min = 250i128;
+    let (client, _, token_addr) = setup_with_token_gate(&env, 10_000, min);
+    let proposer = Address::generate(&env);
+
+    // Proposer holds exactly the minimum
+    MockGovTokenClient::new(&env, &token_addr).set_balance(&proposer, &min);
+
+    let proposal_id = client.create_proposal(&proposer, &make_title(&env), &make_desc(&env), &None);
+
+    assert_eq!(proposal_id, 1);
 }

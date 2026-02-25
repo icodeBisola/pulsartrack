@@ -2,10 +2,7 @@
 //! Core governance parameters, roles, and access control on Stellar.
 
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    Address, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
 #[contracttype]
 #[derive(Clone, PartialEq)]
@@ -37,8 +34,10 @@ pub struct GovernanceParams {
 }
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
+    PendingAdmin,
     GovernanceParams,
     RoleGrant(Address, Role),
     RoleCount(Role),
@@ -56,7 +55,9 @@ pub struct GovernanceCoreContract;
 #[contractimpl]
 impl GovernanceCoreContract {
     pub fn initialize(env: Env, admin: Address) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
@@ -71,12 +72,24 @@ impl GovernanceCoreContract {
             timelock_ledgers: 1_000,
             max_active_proposals: 20,
         };
-        env.storage().instance().set(&DataKey::GovernanceParams, &params);
-        env.storage().instance().set(&DataKey::ActiveProposalCount, &0u32);
+        env.storage()
+            .instance()
+            .set(&DataKey::GovernanceParams, &params);
+        env.storage()
+            .instance()
+            .set(&DataKey::ActiveProposalCount, &0u32);
     }
 
-    pub fn grant_role(env: Env, admin: Address, account: Address, role: Role, expires_at: Option<u64>) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    pub fn grant_role(
+        env: Env,
+        admin: Address,
+        account: Address,
+        role: Role,
+        expires_at: Option<u64>,
+    ) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -91,12 +104,12 @@ impl GovernanceCoreContract {
         };
 
         let _ttl_key = DataKey::RoleGrant(account.clone(), role.clone());
-        env.storage()
-            .persistent()
-            .set(&_ttl_key, &grant);
-        env.storage()
-            .persistent()
-            .extend_ttl(&_ttl_key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        env.storage().persistent().set(&_ttl_key, &grant);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
 
         let count: u32 = env
             .storage()
@@ -107,14 +120,14 @@ impl GovernanceCoreContract {
             .instance()
             .set(&DataKey::RoleCount(role), &(count + 1));
 
-        env.events().publish(
-            (symbol_short!("role"), symbol_short!("granted")),
-            account,
-        );
+        env.events()
+            .publish((symbol_short!("role"), symbol_short!("granted")), account);
     }
 
     pub fn revoke_role(env: Env, admin: Address, account: Address, role: Role) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
@@ -138,7 +151,9 @@ impl GovernanceCoreContract {
     }
 
     pub fn has_role(env: Env, account: Address, role: Role) -> bool {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         if let Some(grant) = env
             .storage()
             .persistent()
@@ -155,17 +170,23 @@ impl GovernanceCoreContract {
     }
 
     pub fn update_params(env: Env, admin: Address, params: GovernanceParams) {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         admin.require_auth();
         let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
             panic!("unauthorized");
         }
-        env.storage().instance().set(&DataKey::GovernanceParams, &params);
+        env.storage()
+            .instance()
+            .set(&DataKey::GovernanceParams, &params);
     }
 
     pub fn get_params(env: Env) -> GovernanceParams {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .instance()
             .get(&DataKey::GovernanceParams)
@@ -173,10 +194,26 @@ impl GovernanceCoreContract {
     }
 
     pub fn get_role_grant(env: Env, account: Address, role: Role) -> Option<RoleGrant> {
-        env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         env.storage()
             .persistent()
             .get(&DataKey::RoleGrant(account, role))
+    }
+
+    pub fn propose_admin(env: Env, current_admin: Address, new_admin: Address) {
+        pulsar_common_admin::propose_admin(
+            &env,
+            &DataKey::Admin,
+            &DataKey::PendingAdmin,
+            current_admin,
+            new_admin,
+        );
+    }
+
+    pub fn accept_admin(env: Env, new_admin: Address) {
+        pulsar_common_admin::accept_admin(&env, &DataKey::Admin, &DataKey::PendingAdmin, new_admin);
     }
 }
 

@@ -1,13 +1,16 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, token::StellarAssetClient, Address, Env};
+use soroban_sdk::{
+    testutils::Address as _, testutils::Ledger as _, token::StellarAssetClient, Address, Env,
+};
 
 // ============================================================
 // Test Helpers
 // ============================================================
 
 fn deploy_token(env: &Env, admin: &Address) -> Address {
-    env.register_stellar_asset_contract_v2(admin.clone()).address()
+    env.register_stellar_asset_contract_v2(admin.clone())
+        .address()
 }
 
 fn mint(env: &Env, token: &Address, to: &Address, amount: i128) {
@@ -19,8 +22,10 @@ fn balance(env: &Env, token: &Address, addr: &Address) -> i128 {
 }
 
 /// Returns (client, admin, token_admin_addr, token_addr, treasury_addr)
-fn setup(env: &Env) -> (
-    SubscriptionManagerContractClient,
+fn setup(
+    env: &Env,
+) -> (
+    SubscriptionManagerContractClient<'_>,
     Address,
     Address,
     Address,
@@ -154,7 +159,8 @@ fn test_subscribe_after_expiry_is_allowed() {
     c.subscribe(&subscriber, &SubscriptionTier::Starter, &false, &true);
 
     // Advance time past expiry
-    env.ledger().set_timestamp(env.ledger().timestamp() + MONTHLY_SECS + 1);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + MONTHLY_SECS + 1);
 
     assert!(!c.is_active(&subscriber));
     // Should succeed now
@@ -179,7 +185,8 @@ fn test_upgrade_charges_prorated_delta() {
 
     // Advance 10 days (of 30) — 20 days remaining
     let ten_days = 10 * 24 * 3600u64;
-    env.ledger().set_timestamp(env.ledger().timestamp() + ten_days);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + ten_days);
 
     let treasury_before = balance(&env, &token, &treasury);
 
@@ -214,7 +221,10 @@ fn test_upgrade_preserves_usage_counters() {
 
     let sub = c.get_subscription(&subscriber).unwrap();
     assert_eq!(sub.campaigns_used, 2, "campaigns_used must be preserved");
-    assert_eq!(sub.impressions_used, 5_000, "impressions_used must be preserved");
+    assert_eq!(
+        sub.impressions_used, 5_000,
+        "impressions_used must be preserved"
+    );
 }
 
 #[test]
@@ -226,7 +236,8 @@ fn test_upgrade_new_expiry_is_full_period_from_now() {
     fund_subscriber(&env, &token, &subscriber);
 
     c.subscribe(&subscriber, &SubscriptionTier::Growth, &false, &true);
-    env.ledger().set_timestamp(env.ledger().timestamp() + 10 * 24 * 3600);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 10 * 24 * 3600);
     let now = env.ledger().timestamp();
 
     c.change_tier(&subscriber, &SubscriptionTier::Business, &false, &true);
@@ -332,7 +343,8 @@ fn test_renew_extends_expiry_beyond_current_expiry() {
     let first_expiry = c.get_subscription(&subscriber).unwrap().expires_at;
 
     // Renew with 15 days still remaining
-    env.ledger().set_timestamp(env.ledger().timestamp() + 15 * 24 * 3600);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 15 * 24 * 3600);
     c.renew(&subscriber, &false, &true);
 
     let sub = c.get_subscription(&subscriber).unwrap();
@@ -391,7 +403,8 @@ fn test_renew_preserves_original_started_at() {
     c.subscribe(&subscriber, &SubscriptionTier::Starter, &false, &true);
     let original_started_at = c.get_subscription(&subscriber).unwrap().started_at;
 
-    env.ledger().set_timestamp(env.ledger().timestamp() + 15 * 24 * 3600);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 15 * 24 * 3600);
     c.renew(&subscriber, &false, &true);
 
     let sub = c.get_subscription(&subscriber).unwrap();
@@ -424,7 +437,10 @@ fn test_cancel_disables_auto_renew_but_stays_active() {
 
     let sub = c.get_subscription(&subscriber).unwrap();
     assert!(!sub.auto_renew);
-    assert!(c.is_active(&subscriber), "subscription must still be active until expiry");
+    assert!(
+        c.is_active(&subscriber),
+        "subscription must still be active until expiry"
+    );
 }
 
 // ============================================================
@@ -493,6 +509,7 @@ fn test_is_active_returns_false_after_expiry() {
     mint(&env, &token, &subscriber, STARTER_MONTHLY);
 
     c.subscribe(&subscriber, &SubscriptionTier::Starter, &false, &true);
-    env.ledger().set_timestamp(env.ledger().timestamp() + MONTHLY_SECS + 1);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + MONTHLY_SECS + 1);
     assert!(!c.is_active(&subscriber));
 }

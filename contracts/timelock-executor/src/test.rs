@@ -7,7 +7,7 @@ use soroban_sdk::{
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-fn setup(env: &Env) -> (TimelockExecutorContractClient, Address, Address) {
+fn setup(env: &Env) -> (TimelockExecutorContractClient<'_>, Address, Address) {
     let admin = Address::generate(env);
     let executor = Address::generate(env);
 
@@ -76,7 +76,7 @@ fn test_queue_entry() {
     let (client, admin, _) = setup(&env);
     let target = Address::generate(&env);
 
-    let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
+    let entry_id = client.queue(&admin, &target, &make_fn(&env), &Vec::new(&env), &make_desc(&env), &500u64);
     assert_eq!(entry_id, 1);
 
     let entry = client.get_entry(&entry_id).unwrap();
@@ -94,7 +94,14 @@ fn test_queue_by_non_admin() {
     let stranger = Address::generate(&env);
     let target = Address::generate(&env);
 
-    client.queue(&stranger, &target, &make_fn(&env), &make_desc(&env), &500u64);
+    client.queue(
+        &stranger,
+        &target,
+        &make_fn(&env),
+        &Vec::new(&env),
+        &make_desc(&env),
+        &500u64,
+    );
 }
 
 #[test]
@@ -106,7 +113,7 @@ fn test_queue_delay_too_short() {
     let target = Address::generate(&env);
 
     // min_delay=100, so 50 is too short
-    client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &50u64);
+    client.queue(&admin, &target, &make_fn(&env), &Vec::new(&env), &make_desc(&env), &50u64);
 }
 
 #[test]
@@ -118,7 +125,23 @@ fn test_queue_delay_too_long() {
     let target = Address::generate(&env);
 
     // max_delay=86_400, so 100_000 is too long
-    client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &100_000u64);
+    client.queue(
+        &admin,
+        &target,
+        &make_fn(&env),
+        &Vec::new(&env),
+        &make_desc(&env),
+        &86_400u64, // max_delay is 86_400
+    );
+    // test_queue_delay_too_long needs a value > 86_400
+    client.queue(
+        &admin,
+        &target,
+        &make_fn(&env),
+        &Vec::new(&env),
+        &make_desc(&env),
+        &100_000u64,
+    );
 }
 
 // ─── execute ─────────────────────────────────────────────────────────────────
@@ -130,10 +153,12 @@ fn test_execute_entry() {
     let (client, admin, executor) = setup(&env);
     let target = Address::generate(&env);
 
-    let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
+    let entry_id = client.queue(&admin, &target, &make_fn(&env), &Vec::new(&env), &make_desc(&env), &500u64);
 
     // Advance past ETA but within grace period
-    env.ledger().with_mut(|li| { li.timestamp = 600; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 600;
+    });
 
     client.execute(&executor, &entry_id);
 
@@ -150,7 +175,7 @@ fn test_execute_too_early() {
     let (client, admin, executor) = setup(&env);
     let target = Address::generate(&env);
 
-    let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
+    let entry_id = client.queue(&admin, &target, &make_fn(&env), &Vec::new(&env), &make_desc(&env), &500u64);
 
     // timestamp is still 0, ETA is 500
     client.execute(&executor, &entry_id);
@@ -165,8 +190,10 @@ fn test_execute_wrong_executor() {
     let target = Address::generate(&env);
     let stranger = Address::generate(&env);
 
-    let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
-    env.ledger().with_mut(|li| { li.timestamp = 600; });
+    let entry_id = client.queue(&admin, &target, &make_fn(&env), &Vec::new(&env), &make_desc(&env), &500u64);
+    env.ledger().with_mut(|li| {
+        li.timestamp = 600;
+    });
 
     client.execute(&stranger, &entry_id);
 }
@@ -179,11 +206,13 @@ fn test_execute_after_grace_period() {
     let (client, admin, executor) = setup(&env);
     let target = Address::generate(&env);
 
-    let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
+    let entry_id = client.queue(&admin, &target, &make_fn(&env), &Vec::new(&env), &make_desc(&env), &500u64);
 
     // grace_period = 172_800 (2 days), ETA = 500
     // Advance way beyond grace period
-    env.ledger().with_mut(|li| { li.timestamp = 500 + 172_800 + 1; });
+    env.ledger().with_mut(|li| {
+        li.timestamp = 500 + 172_800 + 1;
+    });
 
     client.execute(&executor, &entry_id);
 }
@@ -197,7 +226,7 @@ fn test_cancel_entry() {
     let (client, admin, _) = setup(&env);
     let target = Address::generate(&env);
 
-    let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
+    let entry_id = client.queue(&admin, &target, &make_fn(&env), &Vec::new(&env), &make_desc(&env), &500u64);
     client.cancel(&admin, &entry_id);
 
     let entry = client.get_entry(&entry_id).unwrap();
@@ -213,7 +242,7 @@ fn test_cancel_by_non_admin() {
     let target = Address::generate(&env);
     let stranger = Address::generate(&env);
 
-    let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
+    let entry_id = client.queue(&admin, &target, &make_fn(&env), &Vec::new(&env), &make_desc(&env), &500u64);
     client.cancel(&stranger, &entry_id);
 }
 
@@ -225,7 +254,7 @@ fn test_cancel_already_cancelled() {
     let (client, admin, _) = setup(&env);
     let target = Address::generate(&env);
 
-    let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
+    let entry_id = client.queue(&admin, &target, &make_fn(&env), &Vec::new(&env), &make_desc(&env), &500u64);
     client.cancel(&admin, &entry_id);
     client.cancel(&admin, &entry_id); // already cancelled
 }
@@ -239,7 +268,7 @@ fn test_is_ready_before_eta() {
     let (client, admin, _) = setup(&env);
     let target = Address::generate(&env);
 
-    let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
+    let entry_id = client.queue(&admin, &target, &make_fn(&env), &Vec::new(&env), &make_desc(&env), &500u64);
     assert!(!client.is_ready(&entry_id)); // timestamp=0 < eta=500
 }
 
@@ -250,8 +279,10 @@ fn test_is_ready_at_eta() {
     let (client, admin, _) = setup(&env);
     let target = Address::generate(&env);
 
-    let entry_id = client.queue(&admin, &target, &make_fn(&env), &make_desc(&env), &500u64);
-    env.ledger().with_mut(|li| { li.timestamp = 500; });
+    let entry_id = client.queue(&admin, &target, &make_fn(&env), &Vec::new(&env), &make_desc(&env), &500u64);
+    env.ledger().with_mut(|li| {
+        li.timestamp = 500;
+    });
 
     assert!(client.is_ready(&entry_id));
 }
