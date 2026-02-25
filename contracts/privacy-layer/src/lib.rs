@@ -133,7 +133,12 @@ impl PrivacyLayerContract {
         env.storage().instance().extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
         prover.require_auth();
 
-        let proof_data = Bytes::from_slice(&env, b"proof");
+        let mut proof_data = Bytes::new(&env);
+        proof_data.append(&prover.clone().to_xdr(&env));
+        proof_data.append(&segment_ids.clone().to_xdr(&env));
+        proof_data.append(&Bytes::from_slice(&env, &zkp_hash.to_array()));
+        let ts = env.ledger().timestamp().to_be_bytes();
+        proof_data.append(&Bytes::from_slice(&env, &ts));
         let proof_id = env.crypto().sha256(&proof_data);
 
         let proof = AnonymousSegmentProof {
