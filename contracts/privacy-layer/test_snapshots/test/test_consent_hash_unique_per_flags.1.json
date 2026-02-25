@@ -43,14 +43,45 @@
                   "bool": true
                 },
                 {
-                  "bool": true
+                  "bool": false
                 },
                 {
-                  "bool": true
+                  "bool": false
+                },
+                "void"
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+              "function_name": "set_consent",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "u64": 86400
-                }
+                  "bool": false
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "bool": false
+                },
+                "void"
               ]
             }
           },
@@ -145,7 +176,7 @@
                         "symbol": "analytics"
                       },
                       "val": {
-                        "bool": true
+                        "bool": false
                       }
                     },
                     {
@@ -153,7 +184,7 @@
                         "symbol": "consent_hash"
                       },
                       "val": {
-                        "bytes": "df46e36ed610ba7c9e94c4f7b7c7e709d066ca24aaabf925a206bea8f4595bda"
+                        "bytes": "5ba8c4eb338133c7f061e57335a4481fe72b9bf5841c3906e42b4da9c62c1406"
                       }
                     },
                     {
@@ -169,23 +200,21 @@
                         "symbol": "data_processing"
                       },
                       "val": {
-                        "bool": true
+                        "bool": false
                       }
                     },
                     {
                       "key": {
                         "symbol": "expires_at"
                       },
-                      "val": {
-                        "u64": 86400
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
                         "symbol": "targeted_ads"
                       },
                       "val": {
-                        "bool": true
+                        "bool": false
                       }
                     },
                     {
@@ -193,7 +222,7 @@
                         "symbol": "third_party_sharing"
                       },
                       "val": {
-                        "bool": true
+                        "bool": false
                       }
                     },
                     {
@@ -268,6 +297,39 @@
             "ext": "v0"
           },
           86400
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "ledger_key_nonce": {
+                "nonce": 1033654523790656264
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": 1033654523790656264
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
         ]
       ],
       [
