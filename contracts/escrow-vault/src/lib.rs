@@ -70,6 +70,7 @@ pub enum DataKey {
     Admin,
     PendingAdmin,
     FraudContract,
+    DisputeContract,
     TokenAddress,
     OracleAddress,
     MinApprovalThreshold,
@@ -129,6 +130,20 @@ impl EscrowVaultContract {
         env.storage()
             .instance()
             .set(&DataKey::FraudContract, &fraud_contract);
+    }
+
+    pub fn set_dispute_contract(env: Env, admin: Address, dispute_contract: Address) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if admin != stored_admin {
+            panic!("unauthorized");
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::DisputeContract, &dispute_contract);
     }
 
     pub fn hold_for_fraud(env: Env, fraud_contract: Address, escrow_id: u64) {
@@ -475,6 +490,104 @@ impl EscrowVaultContract {
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("refund")),
             (escrow_id, refund),
+        );
+    }
+
+    /// Settle escrow based on dispute outcome.
+    pub fn settle_dispute(
+        env: Env,
+        caller: Address,
+        escrow_id: u64,
+        claimant: Address,
+        respondent: Address,
+        claimant_amount: i128,
+        respondent_amount: i128,
+    ) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        caller.require_auth();
+
+        if claimant_amount < 0 || respondent_amount < 0 {
+            panic!("invalid amount");
+        }
+
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let dispute_contract: Option<Address> = env.storage().instance().get(&DataKey::DisputeContract);
+        let is_authorized_dispute = dispute_contract
+            .map(|addr| addr == caller)
+            .unwrap_or(false);
+        if caller != admin && !is_authorized_dispute {
+            panic!("unauthorized");
+        }
+
+        let mut escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Escrow(escrow_id))
+            .expect("escrow not found");
+
+        if escrow.state == EscrowState::Released || escrow.state == EscrowState::Refunded {
+            panic!("already settled");
+        }
+
+        let total_settlement = claimant_amount + respondent_amount;
+        if total_settlement <= 0 {
+            panic!("invalid amount");
+        }
+        if total_settlement > escrow.locked_amount {
+            panic!("insufficient escrow");
+        }
+
+        let token_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenAddress)
+            .unwrap();
+        let token_client = token::Client::new(&env, &token_addr);
+
+        if claimant_amount > 0 {
+            token_client.transfer(
+                &env.current_contract_address(),
+                &claimant,
+                &claimant_amount,
+            );
+        }
+        if respondent_amount > 0 {
+            token_client.transfer(
+                &env.current_contract_address(),
+                &respondent,
+                &respondent_amount,
+            );
+        }
+
+        escrow.locked_amount -= total_settlement;
+        escrow.released_amount += claimant_amount;
+        escrow.refunded_amount += respondent_amount;
+        escrow.released_at = Some(env.ledger().timestamp());
+        escrow.state = if escrow.locked_amount == 0 {
+            if claimant_amount > 0 && respondent_amount > 0 {
+                EscrowState::PartiallyReleased
+            } else if claimant_amount > 0 {
+                EscrowState::Released
+            } else {
+                EscrowState::Refunded
+            }
+        } else {
+            EscrowState::PartiallyReleased
+        };
+
+        let _ttl_key = DataKey::Escrow(escrow_id);
+        env.storage().persistent().set(&_ttl_key, &escrow);
+        env.storage().persistent().extend_ttl(
+            &_ttl_key,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+
+        env.events().publish(
+            (symbol_short!("escrow"), symbol_short!("settled")),
+            (escrow_id, claimant_amount, respondent_amount),
         );
     }
 
