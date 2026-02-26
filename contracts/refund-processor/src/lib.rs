@@ -206,6 +206,10 @@ impl RefundProcessorContract {
         }
 
         let token_client = token::Client::new(&env, &refund.token);
+        let balance = token_client.balance(&env.current_contract_address());
+        if balance < refund.amount_approved {
+            panic!("insufficient contract balance for refund");
+        }
         token_client.transfer(
             &env.current_contract_address(),
             &refund.requester,
